@@ -133,6 +133,16 @@
     <SolidColorBrush x:Key="Brush.Shell.SysBtnDisabled" Color="#66A08FA8"/>
     <SolidColorBrush x:Key="Brush.Shell.HoverBg" Color="#FF352242"/>
 
+    <!-- 取像舞台三键（库 KxImageStage V2.3.5 契约，与 ThemeLight 键集一致）：深色=设计稿
+         相机舞台口径（底 #060B16 + 主蓝灰网格 10%），扫描光带 C 方案主色 #F97316 两板同值 -->
+    <SolidColorBrush x:Key="Brush.Shell.StageBg" Color="#FF060B16"/>
+    <SolidColorBrush x:Key="Brush.Shell.StageGridLine" Color="#1A7E96BE"/>
+    <LinearGradientBrush x:Key="Brush.Shell.StageScan" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#00F97316" Offset="0"/>
+        <GradientStop Color="#1AF97316" Offset="0.46"/>
+        <GradientStop Color="#00F97316" Offset="0.92"/>
+    </LinearGradientBrush>
+
     <!-- 主题切换开关（两板刻意同值） -->
     <SolidColorBrush x:Key="Brush.Shell.ThemeTrack" Color="#FF4A3360"/>
     <SolidColorBrush x:Key="Brush.Shell.ThemeTrackOn" Color="#FFF97316"/>

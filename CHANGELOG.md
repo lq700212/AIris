@@ -2,6 +2,44 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.4（2026-11-22）取像舞台控件落地：扫描动效 + 深色舞台（沉 Kaleidoscope 库 V2.3.5，三色可配置）
+
+### 胶囊标签形状统一（用户反馈：页面标签"太尖锐"，同 V0.1.1 顶栏问题）
+
+- **全工程胶囊标签整改（8 处）**：监控台判定胶囊/引擎页引擎状态+卡片状态+许可证/
+  配方中心计数+启用中/已停用等手写 `CornerRadius=99/7` Border 全部换成库
+  **`KxChip`/`KxChipText`**（Kaleidoscope V2.3.5 新件，CornerRadius=7 圆角矩形档，
+  与 StatusChip 药丸档并存、同 Tag 语义）——手写胶囊清零，形状归库口径禁再漂移；
+  带状态配色的胶囊改 `BasedOn="{StaticResource KxChip}"` 派生（形状库值、配色宿主）；
+  许可证标签直接用 Tag="Warn" 语义档（删手写 WarnDim/Warn 配色对）；
+
+### 取像区舞台化（用户诉求：设计稿扫描动效 + 深色模式舞台观感 + 沉库复用）
+
+- **取像区换库控件 `ui:KxImageStage`**（Kaleidoscope.UI V2.3.5 新件，AIris 反哺）：
+  MonitorPage.xaml 取像区 StageGrid（原裸 Grid）替换为取像舞台控件——舞台底 +
+  18px 网格底纹 + 主色扫描光带动效（4.2s linear 上→下循环，设计稿 sScan 口径）
+  三件装饰内置；控件继承 Grid，三子元素（StageImage/OverlayCanvas/空态）原样保留，
+  **MonitorPage.xaml.cs 零改动**（ActualWidth/Height 与 SizeChanged 坐标换算口径不变）；
+- **三色可配置（用户要求）**：控件主体颜色（舞台底/网格线）与扫描颜色均为可配置
+  DP（`StageBackground`/`GridLineBrush`/`ScanBrush`，默认 null=主题键自动配色、设
+  本地值=项目自定义原色）——宿主键板三键即 C 方案口径：深色舞台底 #060B16、
+  主蓝灰网格 10%、扫描光带主色 #F97316 渐变（0.46 停靠最亮/92% 渐隐，两板同值）；
+- **深色模式修正（本轮痛点）**：此前取像区无背景、深色下透出 ThemePanelBg 紫面板色；
+  宿主两板同加 `Brush.Shell.Stage*` 三键后，深色 = 设计稿的深色"相机舞台"
+  （#060B16 底 + 网格），浅色 = #E9EEF8 底 + 网格，深浅切换自动跟随；
+- **性能护栏（分层窗软渲染）**：库级总闸 `KxShellDefaults.EnableStageScanMotion`
+  （缺省 true，一键关全局）+ 实例级 `ScanEnabled`；IsVisible=false/Unloaded 双停
+  （BeginAnimation(null)）防空转——最小化/切页实测 CPU 86%→15% 护栏有效；
+  **动画帧率降档 `Timeline.SetDesiredFrameRate(anim, 10)`**：验证期实测 60fps 动画
+  时钟稳态 ~85-90% 单核（分层窗每 tick 整窗重绘），降 10fps 后稳态 ~50%（动画
+  纯增量 ~10%，Mock 合帧/帧流为 V0.1.0 固有 ~40%）——慢位移扫描带肉眼平滑无跳感，
+  **通用口径沉库：分层窗软渲染宿主装饰性动画必须设 DesiredFrameRate ≤10fps 量级**；
+- 方案文档沉淀 `docs/KxImageStage取像舞台控件方案.md`（摸底事实/层序设计/键板契约/
+  实施清单/验证清单，含实施后性能实测修正节）；调研报告追加第十章（开发进度与
+  剩余工作六项）；
+- 库侧同轮：缺省键板两板各补 3 键（两板键集一致）、README 复用索引场景表登记
+  （含适用边界：纯 WPF 适用，HWND airspace 场景不适用）、库 CHANGELOG V2.3.5。
+
 ## V0.1.3（2026-11-22）壳圆角体系 + 运行日志系统 + 顶栏 hover 白垫与胶囊居中
 
 ### 窗体圆角（用户反馈：窗口化要圆角、全屏不要）

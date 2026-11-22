@@ -19,6 +19,7 @@
 7. [风险清单](#七主要风险清单)
 8. [落地路径](#八落地路径建议)
 9. [来源汇总](#九核心来源)
+10. [开发进度与剩余工作（2026-11-22）](#十开发进度与剩余工作2026-11-22)
 
 ---
 
@@ -208,3 +209,59 @@ NVIDIA 于 **2026 年 5 月 26 日**发布的开放词汇检测 / 视觉定位�
 - DGX Spark 流水线示例（离线帧采样，非实时视频）：[joeynyc/cosmos-locateanything-dgx](https://github.com/joeynyc/cosmos-locateanything-dgx)
 
 > 注：GPU/外围硬件价格为 2026-11 调研时的市场行情估算；DGX Spark、Jetson Orin Nano Super 价格来自公开发布信息，采购时以实价为准。
+
+---
+
+## 十、开发进度与剩余工作（2026-11-22）
+
+> 本章随开发推进滚动更新。版本史细节见仓库 `CHANGELOG.md`（最新在顶部）。
+
+### 10.1 当前进度
+
+**平台软件已全功能落地并推 GitHub**（github.com/lq700212/AIris，主分支 main，
+最新 V0.1.3 = commit 04e1a3d）：
+
+- **技术栈定版**：.NET Framework 4.7.2 + WPF（64 位），MVVM 双工程
+  （AIris.Core 纯逻辑 + AIris.WPF 壳），Kaleidoscope 公司级控件库以 git
+  submodule 复用（窗壳基类/弹窗基类/主题字典/通讯与相机适配器）。
+- **UI 全量**：C 方案「熔金流场」主题（橙粉渐变 + 圆角 16 + 深浅双模式），
+  6 页全功能（运行监控台 / 配方中心 / 配方编辑器 / 检测引擎 / 审计追溯 /
+  设备与集成）+ 4 弹窗（新建配方两步向导 / 确认 / NG 详情 / 存档详情）；
+  顶栏菜单壳（WindowChrome 命中区适配）、分层真圆角窗体、品牌图标三面
+  （exe 内嵌 / 运行窗口 / 顶栏矢量）。
+- **逻辑全量**：Recipe/StepRule/ROIRect/AuditRecord 等模型；
+  JudgeEngine（ROI-IoU × 数量 × 整检三类判定语义）；WorkstepEngine
+  （稳定帧累计推进 / NG 挂起 / 重检）；RunMonitor 编排线程
+  （采集→检测→判定→工步→审计）；RecipeStore(JSON) + JsonAuditStore
+  (JSONL 按天 + 截图 PNG)；日志系统（文件按天落盘 + UI 实时流双出口）。
+- **接入面留桩（关键设计）**：检测引擎走 `IDetectionEngine` 唯一接口——
+  HttpDetectionEngine 已完成组包/解析/降级逻辑（POST /detect 契约见
+  README），**只差服务端**；真机相机走 ICameraSource 接口——HikCameraStub
+  占位。Mock 三件套（MockScene/MockCameraSource/MockDetectionEngine）
+  支撑无硬件全流程演示（NG 告警、审计落档、工步推进均可真实演练）。
+
+**进行中（本轮）**：取像舞台控件 KxImageStage（扫描动效 + 深色舞台，
+沉 Kaleidoscope 库 V2.3.5）——方案定稿见 `docs/KxImageStage取像舞台控件方案.md`。
+
+### 10.2 剩余工作与做法
+
+| # | 工作 | 怎么做 | 依赖/前提 |
+|---|---|---|---|
+| 1 | **大模型检测服务端接入** | 部署 Qwen2.5-VL-7B（Apache 2.0 商用合规；5070 Ti 16GB 单卡可跑，batch=1 约 430ms/帧）。生产推理用社区 MIT 版 locateanything-batch（pip 装，`HF_HUB_OFFLINE=1` 离线）。实现 HTTP 服务按 README 契约 `POST /detect`（请求 `{model,prompts,image_b64}` → 响应 `{ok,detections[]}`，0~1000 归一化框）。宿主侧 HttpDetectionEngine 桩已就绪，服务端起即联调 | 无硬依赖，可最先启动 |
+| 2 | **POC 检出率实测**（整个技术路线是否成立的决定性一步，对应第八章 POC 阶段） | 搭 POC 环境（5070 Ti 工控机 + transformers 原生推理），取工厂真实工件照片 10 类典型零件（含 M3 小螺丝/相似件/对称件）跑检出率。第七章风险兜底：小零件局部放大二次推理、few-shot 微调、传统模板匹配双通道。**POC 未过不承诺交付** | 第 1 项先就位 + 采购计算主机（第五章 5.1） |
+| 3 | **真机相机接入** | ICameraSource 接口实现切到 Kaleidoscope 库相机适配器（KxHik2DCamera 等，海康 GigE/USB3），相机选型按第五章 5.2（500 万像素 GigE + 高角度环形光 + 漫射罩）。注意 airspace：相机 SDK HWND 显示区与 WPF 分层窗互斥，画面统一走位图帧（当前 Mock 即此口径） | POC 通过后按工位硬件到位 |
+| 4 | **PLC/IO 工位联锁** | Kaleidoscope 库 PlcNetCommQue（HslCommunication，授权文件 HslLicense.dat/hsl.dat 已部署 00_ExeBuild）。对接三色灯/声光报警/引导屏/启停信号；断连重连与心跳走库内既有范式 | 现场电控点表 |
+| 5 | **配方通用化与现场部署** | 配方编制 SOP（目标：新产线半天配方）；多工位部署形态；MES 对接（可选）；离线部署包制作（模型权重 + 运行时 + 授权，全离线） | POC 通过 |
+| 6 | **UI 检测框三态**（小项） | 设计稿口径：橙实线(待装+dim 底)/绿实线(已装)/黄虚线(等待)/红实线(NG) + 标签胶囊；当前全部橙色实线，判定结果已有数据（JudgeEngine 语义），补 View 层状态→样式映射即可 | 无，随时可做 |
+
+### 10.3 进度对照（第八章落地路径）
+
+- **POC 阶段的软件侧已全部就绪**（Mock 全流程可演示、HTTP 接入面留桩、
+  审计/判定/工步链路真实可跑）——POC 启动时只需部署服务端 + 换真机
+  数据源，软件零改造接入；
+- MVP 阶段内容（真相机流、引导大屏、声光报警、截图审计）中**截图审计
+  已完成**、引导屏/声光属第 3/4 项硬件联动；
+- 平台化阶段（配方中心、多工位、MES、模型可插拔）中配方中心/引擎可插拔
+  架构已在 V0.1.0 落地，多工位与 MES 待现场化推进。
+- 结论：**软件先行策略已把 POC 周期压缩到"纯模型与硬件验证"**，第 1/2 项
+  是当前唯一的关键路径。

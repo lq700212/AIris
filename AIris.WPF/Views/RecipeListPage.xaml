@@ -23,8 +23,8 @@
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
                 <TextBlock Text="▤ 配方中心" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
-                <Border CornerRadius="99" Background="{DynamicResource ThemePanel2Bg}" Padding="10,3" Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding EnabledNote}" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"/>
+                <Border Style="{DynamicResource KxChip}" Background="{DynamicResource ThemePanel2Bg}" Margin="14,0,0,0" VerticalAlignment="Center">
+                    <TextBlock Text="{Binding EnabledNote}" Style="{DynamicResource KxChipText}"/>
                 </Border>
             </StackPanel>
             <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}" Style="{DynamicResource FreshPrimaryButton}"
@@ -57,11 +57,11 @@
                                 <!-- 卡头：名称 + 状态胶囊 -->
                                 <Grid>
                                     <TextBlock Text="{Binding Name}" FontSize="14.5" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                                    <Border HorizontalAlignment="Right" CornerRadius="99" Padding="9,3" Background="{DynamicResource ThemeOkDim}"
+                                    <Border HorizontalAlignment="Right" Style="{DynamicResource KxChip}" Tag="Ok" Padding="9,3" Background="{DynamicResource ThemeOkDim}"
                                             Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}">
                                         <TextBlock Text="启用中" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource ThemeOk}"/>
                                     </Border>
-                                    <Border HorizontalAlignment="Right" CornerRadius="99" Padding="9,3" Background="{DynamicResource ThemePanel2Bg}"
+                                    <Border HorizontalAlignment="Right" Style="{DynamicResource KxChip}" Padding="9,3" Background="{DynamicResource ThemePanel2Bg}"
                                             Visibility="{Binding Enabled, Converter={StaticResource InvBoolToVis}}">
                                         <TextBlock Text="已停用" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
                                     </Border>

@@ -14,7 +14,8 @@
 -->
 <UserControl x:Class="AIris.WPF.Views.MonitorPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
@@ -41,8 +42,9 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- 画面 + 叠加层（Grid 共享渲染区；Canvas 由 code-behind 画框） -->
-                    <Grid Grid.Row="0" x:Name="StageGrid" ClipToBounds="True" SizeChanged="Stage_SizeChanged">
+                    <!-- 画面 + 叠加层（库 KxImageStage 取像舞台：舞台底/网格/扫描光带，宿主子元素直接落 Children；
+                         Canvas 由 code-behind 画框——控件即 Grid，ActualWidth/Height 与 SizeChanged 口径不变） -->
+                    <ui:KxImageStage Grid.Row="0" x:Name="StageGrid" SizeChanged="Stage_SizeChanged">
                         <Image x:Name="StageImage" Source="{Binding FrameImage}" Stretch="Uniform"/>
                         <Canvas x:Name="OverlayCanvas" IsHitTestVisible="False"/>
                         <!-- 空态（无画面） -->
@@ -59,7 +61,7 @@
                                 </Style>
                             </TextBlock.Style>
                         </TextBlock>
-                    </Grid>
+                    </ui:KxImageStage>
 
                     <!-- 卡脚信息 -->
                     <Grid Grid.Row="1" Margin="2,10,2,0">
@@ -105,10 +107,10 @@
                 <StackPanel>
                     <Grid>
                         <TextBlock Text="{Binding StepPos}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                        <!-- 判定胶囊 -->
-                        <Border HorizontalAlignment="Right" CornerRadius="99" Padding="10,3">
+                        <!-- 判定胶囊（库 KxChip 圆角矩形档 + BasedOn 状态配色） -->
+                        <Border HorizontalAlignment="Right">
                             <Border.Style>
-                                <Style TargetType="Border">
+                                <Style TargetType="Border" BasedOn="{StaticResource KxChip}">
                                     <Setter Property="Background" Value="{DynamicResource ThemePanel2Bg}"/>
                                     <Style.Triggers>
                                         <DataTrigger Binding="{Binding Verdict}" Value="ok">
@@ -122,7 +124,7 @@
                             </Border.Style>
                             <TextBlock FontSize="11" FontWeight="Bold">
                                 <TextBlock.Style>
-                                    <Style TargetType="TextBlock">
+                                    <Style TargetType="TextBlock" BasedOn="{StaticResource KxChipText}">
                                         <Setter Property="Text" Value="判定中"/>
                                         <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
                                         <Style.Triggers>
