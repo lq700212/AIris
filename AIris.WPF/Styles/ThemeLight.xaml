@@ -76,7 +76,11 @@
     <SolidColorBrush x:Key="Brush.Fresh.ButtonHoverBorder" Color="#FFF97316"/>
     <SolidColorBrush x:Key="Brush.Fresh.ButtonPressedBg" Color="#FFFFDFC8"/>
     <SolidColorBrush x:Key="Brush.Fresh.FgStrong" Color="#FF3A3230"/>
-    <SolidColorBrush x:Key="Brush.Fresh.FgMid" Color="#FF9A8F86"/>
+    <!-- 输入族正文色（输入框内容/下拉选中值/下拉箭头/下拉项文字）：必须与正文同强度。
+         设计稿 .tin / .sel 的 CSS 字色走主字色变量（#1c2333），muted 只留给占位符.
+         历史坑（V0.1.9）：此处曾误配 muted #9A8F86，导致全站输入值像灰色提示文字、
+         编辑器/引擎页配置项几乎读不出来——输入值不是次要信息，勿再调浅. -->
+    <SolidColorBrush x:Key="Brush.Fresh.FgMid" Color="#FF3A3230"/>
     <SolidColorBrush x:Key="Brush.Fresh.InputBg" Color="#FFFFFFFF"/>
     <SolidColorBrush x:Key="Brush.Fresh.Accent" Color="#FFF97316"/>
     <SolidColorBrush x:Key="Brush.Fresh.AccentBorder" Color="#FFEA580C"/>

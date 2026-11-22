@@ -2,6 +2,33 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.9（2026-11-22）输入族字色修正：配置框不再像灰色占位文字 + 解码模式下拉补选项
+
+### 一、输入框文字不醒目（用户目检反馈）
+
+- **根因**：`FreshInput/FreshCombo/FreshPwdInput/FreshComboItem` 的前景色统一取库契约键
+  `Brush.Fresh.FgMid`，宿主却在两套主题里把它配成 muted 灰（浅色 `#9A8F86`、深色 `#A08FA8`）——
+  等于把"用户填写的值/选中的值"当次要说明文字渲染，检测引擎页的协议、解码模式、
+  批处理大小读数发灰，和空占位几乎分不出来；
+- **修正**：浅色 `#3A3230`、深色 `#EDE6EF`（与两套主题正文同强度）。设计稿 `.tin/.sel`
+  的字色本就是主字色，muted 只该留给占位符。改的是同一个契约键，所以全站输入框/下拉/
+  密码框/下拉项一次性对齐（引擎/配方编辑/设置/审计筛选/新建配方弹窗）；
+- **为什么不逐页改 XAML**：库模板内部用 `DynamicResource Brush.Fresh.FgMid` 写死语义键，
+  页级 `Foreground` 改不动下拉的选中值/箭头；键板值才是唯一正解，且两套主题同步换值。
+
+### 二、目检顺带修正：解码模式下拉空白
+
+- `DecodeMode` 绑了 `SelectedItem` 但 ComboBox 没有 `ItemsSource`（红线条目：SelectedItem
+  绑字符串时 Items 必须是字符串集合）——框内永远空白、点开无选项。补
+  `EngineViewModel.DecodeModeChoices` 三档（hybrid（MTP 优先）/ fast（MTP）/ slow（AR）），
+  与 `EngineConfig.DecodeMode` 的 id 映射一一对应；默认值正常回显。
+
+### 三、验证
+
+- MSBuild `AIris.WPF` 0 error；浅色/深色两套主题实机截图目检（`Tools/Shots/v019_engine_light2.png`、
+  `v019_engine_dark2.png`）：协议值、`hybrid（MTP 优先）`、批处理 `8` 均为正文强度，
+  深色下为亮白；解码模式正常显示且可展开。其它页面输入族共用同一键，同步受益。
+
 ## V0.1.8（2026-11-22）引擎切换语义修复：回落可见化 + 状态不再自相矛盾 + 切换生命周期保护
 
 ### 一、用户问题：切了引擎 Mock 还在跑、Mock 卡还亮"当前引擎"（真 Bug，非降级设计本身）

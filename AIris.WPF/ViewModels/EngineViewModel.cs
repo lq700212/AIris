@@ -91,6 +91,20 @@ namespace AIris.WPF.ViewModels
         public ObservableCollection<EngineCardVm> Cards { get; } = new ObservableCollection<EngineCardVm>();
 
         // —— 推理参数（EngineConfig 落 INI） ——
+
+        /// <summary>
+        /// 解码模式下拉选项（展示文案，与 EngineConfig.DecodeMode 的 id 一一对应：
+        /// hybrid→"hybrid（MTP 优先）"、fast→"fast（MTP）"、slow→"slow（AR）"）。
+        /// 【必须给 Items】WPF ComboBox 的 SelectedItem 绑字符串时，Items 也必须是字符串集合，
+        /// 否则选中值对不上、框内永远空白（AGENTS.md 红线；本页 V0.1.9 目检抓获）。
+        /// </summary>
+        public System.Collections.Generic.List<string> DecodeModeChoices { get; } = new System.Collections.Generic.List<string>
+        {
+            "hybrid（MTP 优先）",
+            "fast（MTP）",
+            "slow（AR）",
+        };
+
         private string _decodeMode = "hybrid（MTP 优先）";
         public string DecodeMode
         {

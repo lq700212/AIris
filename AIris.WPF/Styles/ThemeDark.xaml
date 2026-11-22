@@ -73,7 +73,8 @@
     <SolidColorBrush x:Key="Brush.Fresh.ButtonHoverBorder" Color="#FFF97316"/>
     <SolidColorBrush x:Key="Brush.Fresh.ButtonPressedBg" Color="#FF2F1C3C"/>
     <SolidColorBrush x:Key="Brush.Fresh.FgStrong" Color="#FFEDE6EF"/>
-    <SolidColorBrush x:Key="Brush.Fresh.FgMid" Color="#FFA08FA8"/>
+    <!-- 输入族正文色：同浅色口径，输入值/下拉选中值必须与正文同强度，muted 只给占位符 -->
+    <SolidColorBrush x:Key="Brush.Fresh.FgMid" Color="#FFEDE6EF"/>
     <SolidColorBrush x:Key="Brush.Fresh.InputBg" Color="#FF2F1C3C"/>
     <SolidColorBrush x:Key="Brush.Fresh.Accent" Color="#FFF97316"/>
     <SolidColorBrush x:Key="Brush.Fresh.AccentBorder" Color="#FFEA580C"/>
