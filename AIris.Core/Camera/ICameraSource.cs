@@ -9,11 +9,14 @@ namespace AIris.Core.Camera
     {
         public Bitmap Image { get; private set; }
         public DateTime Timestamp { get; private set; }
+        /// <summary>场景无内容（Mock 空场；真机恒 false）——UI 据此回无帧空态。</summary>
+        public bool IsEmptyScene { get; private set; }
 
-        public CameraFrame(Bitmap image)
+        public CameraFrame(Bitmap image, bool emptyScene = false)
         {
             Image = image;
             Timestamp = DateTime.Now;
+            IsEmptyScene = emptyScene;
         }
 
         public void Dispose()

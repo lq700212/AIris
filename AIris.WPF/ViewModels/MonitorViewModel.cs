@@ -179,11 +179,12 @@ namespace AIris.WPF.ViewModels
         private void OnFrame(object s, FrameEventArgs e)
         {
             var img = Imaging.ToBitmapSource(e.Image);
+            var empty = e.IsEmptyScene;   // Mock 空场（透明帧不算"有画面"）：UI 回无帧空态，扫描动效恢复
             var dets = e.Detections ?? new List<Detection>();
             var info = e.InfoLine;
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                FrameImage = img ?? FrameImage;
+                FrameImage = empty ? null : (img ?? FrameImage);
                 CameraInfo = info;
                 Boxes.Clear();
                 foreach (var d in dets) Boxes.Add(d);

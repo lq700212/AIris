@@ -1,7 +1,7 @@
 <!--
   检测引擎页（设计稿 data-page="engine" · C 方案）
 
-  ┌ 页头：⚙ 检测引擎 · [引擎态]            [← 返回] [应用配置(primary)] ┐
+  ┌ 页头：🧠 检测引擎 · [引擎态]            [← 返回] [应用配置(primary)] ┐
   │ 引擎卡流：Mock 卡 / LocateAnything 卡(⚠ 仅研究) / Qwen2.5-VL 卡(✓ Apache)│
   │ 推理参数卡：解码模式 / 批处理 / 服务地址 / 模型名                        │
   │ 服务状态卡：显存 / 单帧耗时 / 今日调用（只读 KPI）                      │
@@ -24,7 +24,7 @@
         <!-- 页头 -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="⚙ 检测引擎" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
+                <TextBlock Text="🧠 检测引擎" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
                 <Border Style="{DynamicResource KxChip}" Background="{DynamicResource ThemePanel2Bg}" Margin="14,0,0,0" VerticalAlignment="Center">
                     <TextBlock Text="{Binding EngineState}" Style="{DynamicResource KxChipText}"/>
                 </Border>

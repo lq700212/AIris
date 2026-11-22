@@ -47,6 +47,7 @@
                          叠加框 code-behind 取 Stage.Overlay 画；Mock 帧透明底，网格只在
                          letterbox 与空态露出 = 全舞台一层网格+扫描（V0.1.5 口径）） -->
                     <ui:KxImageStage Grid.Row="0" x:Name="StageGrid" SizeChanged="Stage_SizeChanged"
+                                     GridStep="64"
                                      FrameSource="{Binding FrameImage}" IdleText="等待画面…"/>
 
                     <!-- 卡脚信息 -->

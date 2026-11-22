@@ -21,6 +21,9 @@ namespace AIris.Core.Engine
         public List<Detection> Detections { get; set; }
         /// <summary>画面信息行（"2592 × 1944 · 12 fps · 推理 430 ms/帧"）。</summary>
         public string InfoLine { get; set; } = "";
+        /// <summary>场景无内容（Mock 空场；相机源恒 false）。UI 侧据此回"无帧空态"
+        /// （KxImageStage 空态文本+扫描动效恢复）——空场透明帧不算"有画面"。</summary>
+        public bool IsEmptyScene { get; set; }
     }
 
     /// <summary>运行状态事件（监控台状态区/顶栏灯）。</summary>
@@ -204,8 +207,8 @@ namespace AIris.Core.Engine
                 try
                 {
                     _liveFrame = frame;
-                    // UI 刷画面（带上一轮框叠加；框为空时只刷画面）
-                    RaiseFrame(frame.Image, _lastDetections, BuildInfoLine());
+                    // UI 刷画面（带上一轮框叠加；框为空时只刷画面；空场标记透传供 UI 回空态）
+                    RaiseFrame(frame.Image, _lastDetections, BuildInfoLine(), frame.IsEmptyScene);
 
                     // 未运行 或 无配方：只刷画面，不判定
                     if (!_running || _recipe == null) continue;
@@ -344,10 +347,10 @@ namespace AIris.Core.Engine
 
         // —— 事件抛出 ——
 
-        private void RaiseFrame(Bitmap img, List<Detection> dets, string info)
+        private void RaiseFrame(Bitmap img, List<Detection> dets, string info, bool emptyScene = false)
         {
             var h = FrameReady;
-            if (h != null) h(this, new FrameEventArgs { Image = img, Detections = dets ?? new List<Detection>(), InfoLine = info });
+            if (h != null) h(this, new FrameEventArgs { Image = img, Detections = dets ?? new List<Detection>(), InfoLine = info, IsEmptyScene = emptyScene });
         }
 
         private void RaiseState(string status)

@@ -60,11 +60,23 @@ namespace AIris.Core.Camera
                 {
                     var bmp = Compose();
                     var h = FrameArrived;
-                    if (h != null) h(new CameraFrame(bmp));
+                    if (h != null) h(new CameraFrame(bmp, IsSceneEmpty()));
                 }
                 catch (Exception ex) { OnLog("Mock 合帧异常：" + ex.Message); }
                 Thread.Sleep(125); // 8 fps
             }
+        }
+
+        /// <summary>场景是否无内容（空场）：所有类目在场数量 = 0（真源 = MockScene 单例
+        /// _counts，经 CountOf 读；PartLayout 是静态布局表，Count 恒 >0 不能当在场判断）。
+        /// UI 侧据此回无帧空态（扫描动效恢复）——空场透明帧不算"有画面"。</summary>
+        private static bool IsSceneEmpty()
+        {
+            foreach (var part in MockScene.PartLayout.Keys)
+            {
+                if (MockScene.Instance.CountOf(part) > 0) return false;
+            }
+            return true;
         }
 
     /// <summary>合成一帧：透明底（V0.1.5 口径：台面装饰=舞台一层网格+扫描，Mock 帧只画

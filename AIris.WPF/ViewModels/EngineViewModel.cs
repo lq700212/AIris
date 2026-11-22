@@ -55,7 +55,7 @@ namespace AIris.WPF.ViewModels
     {
         public override string Id => "engine";
         public override string Title => "检测引擎";
-        public override string Icon => "⚙";
+        public override string Icon => "🧠";   // 大脑 = AI 推理引擎语义（用户定版：⚙ 齿轮与设备页撞图标）
 
         public EngineViewModel()
         {
