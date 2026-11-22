@@ -82,7 +82,57 @@
                     <RowDefinition Height="Auto"/>
                 </Grid.RowDefinitions>
                 <ListView Grid.Row="1" ItemsSource="{Binding Rows}" BorderThickness="0" Background="Transparent"
-                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Single">
+                          ScrollViewer.HorizontalScrollBarVisibility="Disabled" SelectionMode="Single"
+                          Foreground="{DynamicResource ThemeTextFg}">
+                    <ListView.Resources>
+                        <!-- 表头轻量样式（库表格族是 DataGrid 目标不适用 ListView+GridView，宿主自绘）：
+                             透明底 + 主题字色 + 底线，深浅主题自动跟随——Aero2 默认表头是浅色 chrome，
+                             深色下白底黑字刺眼（2026-11-22 深色目检发现）。 -->
+                        <!-- 行容器轻量样式：去 Aero2 默认蓝 chrome（深色下露馅），hover/选中走主色弱化底。
+                             【铁坑】模板必须用 GridViewRowPresenter（Columns 绑 GridView.ColumnCollection
+                             附加属性）按列渲染单元格——误用 ContentPresenter 只显示 Content.ToString()
+                             整行变类名（2026-11-22 实踩）。 -->
+                        <Style TargetType="ListViewItem">
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Padding" Value="8,5"/>
+                            <Setter Property="SnapsToDevicePixels" Value="True"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListViewItem">
+                                        <Border x:Name="Bd" Background="{TemplateBinding Background}" Padding="{TemplateBinding Padding}">
+                                            <GridViewRowPresenter Content="{TemplateBinding Content}"
+                                                                  Columns="{TemplateBinding GridView.ColumnCollection}"/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                        <Style TargetType="GridViewColumnHeader">
+                            <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+                            <Setter Property="Background" Value="Transparent"/>
+                            <Setter Property="Padding" Value="8,7"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Left"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="GridViewColumnHeader">
+                                        <Border Background="Transparent" BorderThickness="0,0,0,1"
+                                                BorderBrush="{DynamicResource ThemeBorder}"
+                                                Padding="{TemplateBinding Padding}">
+                                            <ContentPresenter/>
+                                        </Border>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListView.Resources>
                     <ListView.View>
                         <GridView>
                             <GridViewColumn Header="时间" Width="86" DisplayMemberBinding="{Binding Time}"/>

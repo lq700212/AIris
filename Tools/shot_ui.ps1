@@ -31,7 +31,7 @@ $null = [Cap]::SetForegroundWindow($h)
 Start-Sleep -Milliseconds 800
 
 # dock 胶囊中心坐标（1920x1080 全屏最大化口径）：运行监控 700 / 配方中心 837 / 检测引擎 970 / 审计追溯 1100 / 设备集成 1234，y=1008
-$navMap = @{ monitor = 700; recipe = 837; engine = 970; audit = 1100; settings = 1234 }
+$navMap = @{ monitor = 255; recipe = 360; engine = 467; audit = 583; settings = 700 }
 
 function Shot([string]$page) {
   if ($navMap.ContainsKey($page)) {

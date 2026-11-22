@@ -1,25 +1,41 @@
 <!--
-  AIris 主窗（C 方案「熔金流场」壳：顶部渐变标题栏 + 内容区页面切换 + 底部 Dock 胶囊导航）
+  AIris 主窗（C 方案「熔金流场」壳 · 顶栏菜单形态）
 
-  ┌──────────────────────────────────────────────────────────────┐
-  │ ◉ AI 智瞳 · AIris Monitor   [引擎在线][相机在线]  配方：xxx  🌙 │ ← 顶栏 52（titlegrad 渐变）
-  ├──────────────────────────────────────────────────────────────┤
-  │                                                              │
-  │   ContentControl（CurrentPage → DataTemplate 映射 6 个页面）  │ ← 内容 *
-  │                                                              │
-  ├──────────────────────────────────────────────────────────────┤
-  │      (◉运行监控)(▤配方中心)(⚙检测引擎)(▦审计追溯)(⚙设备集成)  │ ← dock 64（胶囊导航）
-  └──────────────────────────────────────────────────────────────┘
-  继承 ChromeBorderlessWindow：库提供 WindowChrome 行为 + 最大化修正，视觉全部本窗自绘。
+  ┌──────────────────────────────────────────────────────────────────────────┐
+  │ ◉ AI 智瞳  (◉运行监控)(▤配方中心)(⚙检测引擎)(▦审计追溯)(⚙设备集成)        │ ← 52px 渐变顶栏
+  │                              [引擎在线][相机在线] [🌓]   — ▢ ✕          │   菜单收拢进顶栏
+  ├──────────────────────────────────────────────────────────────────────────┤
+  │                                                                          │
+  │   ContentControl（CurrentPage → DataTemplate 映射 6 个页面）              │ ← 内容 *
+  │                                                                          │
+  └──────────────────────────────────────────────────────────────────────────┘
+  设计要点（2026-11-22 用户定版 + 当日点击/形状两轮返工）：
+  · 底部 Dock 收拢进顶栏（菜单栏形态）；导航胶囊 = 库 KxLangButton 的 BasedOn 派生
+    （AiNavCapsule）——形状口径归库：CornerRadius 7 / Padding 12,6 / FontSize 12.5 /
+    Cursor Hand 全库值（用户反馈自绘 CornerRadius=99 纯药丸"太尖锐不好看"；
+    HJVision 主窗顶栏全钮 CornerRadius=7 即库口径，用户点名参考）；
+  · 配色因顶栏橙粉渐变彩底宿主化：库 KxLangButton 的 Shell 键色（FgDim 灰字、
+    选中实主色底与渐变撞色）不适用——派生只换配色：未选中白字 / hover 白 20% 垫 /
+    选中白底胶囊+主色字（反转强调）；RadioButton+GroupName="DockNav" 天然互斥；
+  · 【WindowChrome 命中红线】ChromeBorderlessWindow 的 WindowChrome.CaptionHeight
+    （本窗 CaptionHeight=52=顶栏全高）区域内点击默认被吞成拖窗——顶栏内全部交互
+    元素（导航胶囊/🌓/三窗钮）必须设 shell:WindowChrome.IsHitTestVisibleInChrome=True，
+    否则"按钮点击都没响应"（库 ChromeDialogWindow 头注释同款血泪）；顶栏其余空白
+    区域即系统拖动区（原 DragMove 事件随之删除，勿回加）；
+  · 顶栏静态胶囊（引擎/相机在线）CornerRadius 同步 99→7 对齐形状口径；
+  · 三窗钮复用库 KxTitleMin/Max/CloseButton（hover 内置：关闭红底），glyph 跟随
+    StateChanged 事件（双击顶栏空白走系统最大化通道也同步）。
 -->
 <views:ChromeBorderlessWindow x:Class="AIris.WPF.Views.MainWindow"
                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
                              xmlns:views="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
                              xmlns:vm="clr-namespace:AIris.WPF.ViewModels"
                              xmlns:v="clr-namespace:AIris.WPF.Views"
                              WindowStartupLocation="CenterScreen"
                              WindowState="Maximized"
+                             CaptionHeight="52"
                              Title="AI 智瞳"
                              MinWidth="1200" MinHeight="760"
                              Background="{DynamicResource ThemeWindowBg}">
@@ -31,61 +47,72 @@
         <DataTemplate DataType="{x:Type vm:EngineViewModel}"><v:EnginePage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:AuditViewModel}"><v:AuditPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsPage/></DataTemplate>
+
+        <!-- 导航胶囊（库 KxLangButton 的 BasedOn 派生）：形状归库、配色宿主化（见头注释）。
+             GroupName 固定值跨 ItemTemplate 容器互斥（WPF RadioButtonGroup 按 GroupName 注册）；
+             FocusVisualStyle 清空防 WPF 默认焦点虚线框（上轮"胶囊效果奇怪"的元凶之一）。 -->
+        <Style x:Key="AiNavCapsule" TargetType="RadioButton" BasedOn="{StaticResource KxLangButton}">
+            <Setter Property="GroupName" Value="DockNav"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Margin" Value="4,0"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="RadioButton">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
+                                Padding="{TemplateBinding Padding}">
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center"/>
+                                <TextBlock Text="{Binding Title}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            </StackPanel>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="White"/>
+                                <Setter Property="Foreground" Value="{DynamicResource ThemePrimary}"/>
+                                <Setter Property="FontWeight" Value="Bold"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Border Background="{DynamicResource ThemeWindowBg}" CornerRadius="10" ClipToBounds="True">
-        <Grid>
-            <Grid.RowDefinitions>
-                <RowDefinition Height="52"/>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="64"/>
-            </Grid.RowDefinitions>
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="52"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
 
-            <!-- ===== 顶栏（titlegrad 渐变，对位设计稿 app-bar） ===== -->
-            <Border Grid.Row="0" Background="{DynamicResource ThemeTitleGrad}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="Auto"/>
-                        <ColumnDefinition Width="*"/>
-                        <ColumnDefinition Width="Auto"/>
-                    </Grid.ColumnDefinitions>
+        <!-- ===== 顶栏（titlegrad 渐变）：品牌 + 菜单导航 + 状态 + 三窗钮 =====
+             CaptionHeight=52 覆盖全顶栏：空白处拖动/双击最大化由 WindowChrome 提供，
+             交互元素逐个 IsHitTestVisibleInChrome 放行（见头注释红线）。 -->
+        <Border Grid.Row="0" Background="{DynamicResource ThemeTitleGrad}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
 
-                    <!-- 品牌：logo + 名称 -->
-                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
-                        <Border Width="26" Height="26" CornerRadius="8" Background="#66FFFFFF" VerticalAlignment="Center">
-                            <TextBlock Text="◉" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                        </Border>
-                        <TextBlock Text="AI 智瞳" FontSize="15" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
-                        <TextBlock Text="AIris Monitor" FontSize="11" Foreground="#B3FFFFFF" Margin="8,1,0,0" VerticalAlignment="Center"/>
-                    </StackPanel>
+                <!-- 品牌：logo + 名称（WindowChrome 拖动区） -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,6,0" VerticalAlignment="Center">
+                    <Border Width="26" Height="26" CornerRadius="8" Background="#66FFFFFF" VerticalAlignment="Center">
+                        <TextBlock Text="◉" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="AI 智瞳" FontSize="15" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                    <TextBlock Text="AIris Monitor" FontSize="11" Foreground="#B3FFFFFF" Margin="8,1,0,0" VerticalAlignment="Center"/>
+                </StackPanel>
 
-                    <!-- 面包屑：当前页 -->
-                    <TextBlock Grid.Column="1" Text="{Binding CurrentTitle}" FontSize="12" Foreground="#CCFFFFFF"
-                               Margin="18,0,0,0" VerticalAlignment="Center"/>
-
-                    <!-- 右侧：状态胶囊区 + 主题切换（窗口三钮由 ChromeBorderlessWindow 自绘注入标题区，
-                         位置以 WindowChrome CaptionHeight 划定；此处只放业务内容） -->
-                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,150,0" VerticalAlignment="Center">
-                        <Border CornerRadius="99" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
-                            <TextBlock Text="引擎 在线" FontSize="11" Foreground="White"/>
-                        </Border>
-                        <Border CornerRadius="99" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
-                            <TextBlock Text="相机 在线" FontSize="11" Foreground="White"/>
-                        </Border>
-                        <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
-                                FontSize="14" Background="Transparent" BorderThickness="0" Foreground="White"
-                                Cursor="Hand" Margin="4,0,0,0" ToolTip="切换深浅主题"/>
-                    </StackPanel>
-                </Grid>
-            </Border>
-
-            <!-- ===== 内容区：页面切换 ===== -->
-            <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,8"/>
-
-            <!-- ===== 底部 Dock：胶囊导航（对位设计稿 C 方案 dock） ===== -->
-            <Border Grid.Row="2" Background="Transparent">
-                <ItemsControl ItemsSource="{Binding DockPages}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                <!-- 菜单导航（收拢自底部 Dock）：库 KxLangButton 派生胶囊（形状库口径+配色宿主化），
+                     IsHitTestVisibleInChrome 放行 WindowChrome 命中区（见头注释红线） -->
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding DockPages}" VerticalAlignment="Center" Margin="10,0,0,0">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" IsItemsHost="True"/>
@@ -93,36 +120,45 @@
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
-                            <Button Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
-                                    CommandParameter="{Binding Id}" Cursor="Hand" Margin="6,0">
-                                <Button.Template>
-                                    <ControlTemplate TargetType="Button">
-                                        <Border x:Name="cap" CornerRadius="99" Padding="20,9" Margin="0"
-                                                Background="{DynamicResource ThemePanelBg}"
-                                                BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1">
-                                            <StackPanel Orientation="Horizontal">
-                                                <TextBlock Text="{Binding Icon}" FontSize="13" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource ThemeTextMuted}"/>
-                                                <TextBlock Text="{Binding Title}" FontSize="12.5" Margin="7,0,0,0" VerticalAlignment="Center"
-                                                           Foreground="{DynamicResource ThemeTextFg}"/>
-                                            </StackPanel>
-                                        </Border>
-                                        <ControlTemplate.Triggers>
-                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
-                                                <Setter TargetName="cap" Property="Background" Value="{DynamicResource ThemeBadgeGrad}"/>
-                                                <Setter TargetName="cap" Property="BorderBrush" Value="Transparent"/>
-                                            </DataTrigger>
-                                            <Trigger Property="IsMouseOver" Value="True">
-                                                <Setter TargetName="cap" Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
-                                            </Trigger>
-                                        </ControlTemplate.Triggers>
-                                    </ControlTemplate>
-                                </Button.Template>
-                            </Button>
+                            <RadioButton Style="{StaticResource AiNavCapsule}"
+                                         Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                         CommandParameter="{Binding Id}"
+                                         IsChecked="{Binding IsCurrent, Mode=OneWay}"
+                                         shell:WindowChrome.IsHitTestVisibleInChrome="True"
+                                         ToolTip="{Binding Title}"/>
                         </DataTemplate>
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
-            </Border>
-        </Grid>
-    </Border>
+
+                <!-- 右侧：状态胶囊（形状对齐 7 圆角口径；WindowChrome 拖动区）+ 主题切换 -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
+                    <Border CornerRadius="7" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
+                        <TextBlock Text="引擎 在线" FontSize="11" Foreground="White"/>
+                    </Border>
+                    <Border CornerRadius="7" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
+                        <TextBlock Text="相机 在线" FontSize="11" Foreground="White"/>
+                    </Border>
+                    <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
+                            FontSize="14" Background="Transparent" BorderThickness="0" Foreground="White"
+                            Cursor="Hand" Margin="4,0,0,0" FocusVisualStyle="{x:Null}" ToolTip="切换深浅主题"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
+
+                <!-- 三窗钮（库样式：hover 内置，关闭=红底；IsHitTestVisibleInChrome 放行命中区） -->
+                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
+                    <Button Style="{DynamicResource KxTitleMinButton}" Content="—" Click="Min_Click" ToolTip="最小化"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                    <Button Style="{DynamicResource KxTitleMaxButton}" x:Name="MaxBtn" Click="Max_Click" ToolTip="最大化 / 还原"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                        <TextBlock x:Name="MaxGlyph" Text="▢" FontSize="11"/>
+                    </Button>
+                    <Button Style="{DynamicResource KxTitleCloseButton}" Content="✕" Click="Close_Click" ToolTip="关闭"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <!-- ===== 内容区：页面切换 ===== -->
+        <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,16"/>
+    </Grid>
 </views:ChromeBorderlessWindow>

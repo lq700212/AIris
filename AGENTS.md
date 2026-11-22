@@ -61,6 +61,11 @@
 
 - 远程 `origin`（GitHub），主分支以 `git branch --show-current` 实际为准；
   **任何推送/领先判断先确认当前分支与 upstream**，参照系只能是 `git log @{u}..HEAD`。
+- **版本号递增纪律（2026-11-22 用户定版，勿再提醒）**：用户没有明说的情况下，
+  **只递增第三位小版本号**（V0.1.0 → V0.1.1 → V0.1.2 …），禁止擅自升次版本（0.2.0）、
+  大版本（1.0.0）或加版本后缀花样；升第二/第一位只在用户当次明确说出版本号时执行。
+  配套口径：**已提交推送的版本条目不再追加 `###` 小节**——推送之后的新工作一律开
+  新的小版本条目（如 V0.1.1），保持"版本段 ↔ 提交"一一对应可回溯。
 - commit message 由全局技能 `git自动提交推送` 从 CHANGELOG 最新版本小节自动生成，
   **禁止 AI 手打 message 正文**；提交用 `--explicit` 显式暂存（逐个 `git add <路径>`），
   **禁止 `git add -A`**。
@@ -109,18 +114,38 @@
    旧样式键**同步一次改到位**；仅当用户当次明确要求兼容某点才例外。
 9. **UI 改动必须截图目检**：Edge/PrintWindow 截图对照设计稿 C 方案，发现不对当场修
    （绑定静默失败、浅色下写死深色这类问题只有目检能抓）。
-10. **UI 能复用共享件就复用，禁止手抄样板**：弹窗壳 `ChromeDialogWindow`、表单行 `FormField`、
-    状态胶囊 `StatusChip`、按钮 `Kx*Button/Fresh*Button`、输入框 `Fresh*`/`KxTextBox`、
-    表格 `BrandGrid*`——有现成的必须用；颜色一律 `Theme*` 主题键，禁止写死色值。
-11. **检测判定语义红线**：检测框**永不显示置信度**（模型无置信度输出，调研报告 §7）；
+10. **UI 开工先查 Kaleidoscope 控件复用索引，库内确无对应物才允许自绘**（2026-11-22 主窗导航胶囊
+    实训固化：漏查库内 `KxLangButton` 自绘 ControlTemplate 还漏清焦点虚线框）：
+    - 新建任何控件/样式/转换器前，先跑
+      `grep -o 'x:Key="[^"]*"' ThirdParty/Kaleidoscope/Kaleidoscope.UI/Themes/*.xaml`
+      对着库 README 的「**控件复用索引（按场景查）**」表查一遍（弹窗壳/三窗钮/导航胶囊/Tab/按钮
+      六档/输入/状态胶囊/卡片/KPI/表格/标签/开关/转换器全有现成键）；
+    - 库内有对应物 → 直接用样式键/控件类；近似形态 → `BasedOn="{StaticResource 库键}"` 再造；
+    - 确无对应物才自绘，且必须：走 `Theme*` 主题键（禁写死色值）+ `FocusVisualStyle="{x:Null}"`
+      （WPF 默认焦点虚线框是"胶囊效果很奇怪"的元凶）+ 登记本文件索引表评审是否沉库。
+11. **颜色一律 `Theme*` 主题键，禁止写死色值**；TextBox 类控件**禁设非零垂直 Padding**
+    （FreshInput/KxTextBox 模板垂直内缩会裁掉文本行——AIris 实训 19 处返工；居中交给
+    VerticalContentAlignment）；ComboBox 的 SelectedItem 绑字符串时 Items 必须给字符串集合
+    （绑 ComboBoxItem 集合 = SelectedItem 永远对不上显示空）；ListViewItem 自定义模板必须用
+    **GridViewRowPresenter**（Columns 绑 `GridView.ColumnCollection` 附加属性）按列渲染单元格——
+    误用 ContentPresenter 只显示 Content.ToString() 整行变类名（2026-11-22 AuditPage 实踩）。
+12. **检测判定语义红线**：检测框**永不显示置信度**（模型无置信度输出，调研报告 §7）；
     位置判定只走 ROI-IoU 几何规则 + 连续 N 帧稳定，几何判定是确定性的、可审计的；
     判定口径改动必须同步调研报告与审计存档字段。
+13. **WindowChrome 命中红线**：无边框窗（ChromeBorderlessWindow/ChromeDialogWindow）的
+    WindowChrome.CaptionHeight 区域内，未设 `shell:WindowChrome.IsHitTestVisibleInChrome=True`
+    的交互元素点击一律被吞成拖窗——"按钮看起来正常却全无响应"的头号根因（2026-11-22 实测：
+    底部 dock 在命中区外正常，收拢进 52px 顶栏后导航/主题钮/三窗钮全哑）。顶栏/标题条内
+    每个按钮都要逐个放行；宿主 CaptionHeight 应=顶栏全高（空白处拖动+双击最大化）。
+    配套：**UI 交互验证必须物理实点**（PrintWindow/静态截图验不出点击吞没）——
+    `Tools\click_ui.ps1`（SetCursorPos+mouse_event）+ agent-desktop 截图链路。
 
 ## 约定索引
 
 | 动这块 | 先读 |
 | --- | --- |
 | 新弹窗创建（ChromeDialogWindow 骨架/标题条/隐式样式） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md` + `Views\LicenseDialog.xaml`（最简样板） |
+| **新建控件/样式前查库内现成件**（场景→控件对照表 + 自绘三条件 + 检索命令） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md`「**控件复用索引（按场景查）**」节——开工先查，禁止重复造轮子 |
 | 主题键新增（两套字典同键换值 + 契约键段字面值红线） | `Styles/ThemeLight.xaml` + `ThemeDark.xaml` 尾部注释 |
 | 检测引擎接入（真实模型/HTTP 服务） | `AIris.Core\Detection\IDetectionEngine.cs` 文件头（接口契约 + HttpDetectionEngine 填实指引） |
 | 相机接入（海康/大恒真机） | `AIris.Core\Camera\ICameraSource.cs` 文件头 + Kaleidoscope `Cameras/` 适配器 |
@@ -146,6 +171,9 @@
 - **UI 目检**：`powershell -File Tools\shot_ui.ps1 -pages "monitor,recipe,engine,audit,settings"`
   （PrintWindow 不受窗口遮挡影响，截图落 `Tools\Shots\`）对照设计稿 C 方案（橙粉渐变/胶囊/
   大圆角/dock 导航/浅色默认），明暗两套各看一遍。
+- **UI 交互实点回归**：`powershell -File Tools\click_ui.ps1 -x <坐标> -y <坐标>`（物理鼠标
+  点击，验顶栏按钮/弹窗按钮等一切交互——静态截图验不出 WindowChrome 吞点击）+ agent-desktop
+  截图确认状态变化；改顶栏/标题条后必跑。
 
 ## 文档同步（每次任务完成必做）
 
