@@ -2,6 +2,40 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.5（2026-11-22）取像显示傻瓜化：全舞台一层网格+扫描（沉库 V2.3.6 帧显示管线 + 扫描联动）
+
+### 全舞台一层网格+扫描（用户反馈：红框抓到画面矩形内双层网格叠加）
+
+- **根因**：Mock 合成帧自画台面装饰（暖白渐变底 + 64px 网格 + 画面内水印）——
+  与 KxImageStage 舞台网格两层叠加；真实监控视频不带装饰网格，画面内容层不该有；
+- **Mock 帧透明化**（MockCameraSource.Compose）：去台面渐变底/64px 网格/水印，
+  只画零件（透明底 32bppArgb；文字抗锯齿 ClearType→AntiAliasGridFit 防透明底
+  脏边）——舞台"一层网格+扫描"透底，letterbox 与空态露网格、零件浮在舞台上；
+- **Imaging.ToBitmapSource 保 alpha 重写**：弃 GetHbitmap 路线（HBitmap 无 alpha
+  语义，透明像素压成黑底）改 LockBits 直拷；**alpha 语义红线（实测教训）**：GDI
+  Format32bppArgb=直通 alpha，目标格式必须 `PixelFormats.Bgra32`——喂 Pbgra32
+  （预乘）会把半透明像素当预乘值解读，显示叠底溢出爆白（透明帧零件区全糊白）；
+  顺带 8fps 高频路径免 GDI 句柄开销；
+- **四参数对标设计图核对（不改值）**：舞台底/网格线/扫描色/网格步距（GridStep）
+  均为控件 DP 可调，当前宿主键板值与设计稿 `.cam-img` 逐项吻合（浅 #E9EEF8 /
+  rgba(80,100,160,.10) 18px / 深 #060B16 / rgba(126,150,190,.10) / 扫描 C 方案
+  主色 10%），无需调整。
+
+### 取像控件傻瓜式升级（用户要求：对标 HJVision 封装，外部调用零黑盒负担）
+
+- **库 KxImageStage 内置帧显示管线（Kaleidoscope V2.3.6）**：帧图/空态文本/
+  叠加画布 `Overlay`（画面上扫描带下）三件内置——宿主一行绑定即得完整取像显示，
+  单图/实时视频通吃（帧源与显示解耦，对标 HJVision VisionPreviewHost 傻瓜式口径）；
+- **扫描联动（用户要求，封装内建）**：显示图像/实时视频自动停扫描动效、清帧回
+  空态自动恢复——只有初始空态（无帧）才有扫描，外部调用自动保证宿主零接线；
+- **MonitorPage 傻瓜式迁移**：手工 Image/空态文本/OverlayCanvas 三件删除，一行
+  `FrameSource="{Binding FrameImage}" IdleText="等待画面…"`；叠加框 code-behind
+  改取 `Stage.Overlay`（Stage 别名=StageGrid，坐标换算口径零改动）；
+- 库侧同轮：双喂帧入口（绑定式 FrameSource / 命令式 ShowFrame/ClearFrame 任意
+  线程安全，二选一红线）、IdleText/FrameStretch DP、纯装饰用法零破坏、README
+  复用索引与方案文档 3.7 节同步（含验证：浅色屏摄逐位 #E9EEF8 命中/网格透底/
+  透明帧零件浮层清晰/有帧连拍 diff=0 扫描停实锤）。
+
 ## V0.1.4（2026-11-22）取像舞台控件落地：扫描动效 + 深色舞台（沉 Kaleidoscope 库 V2.3.5，三色可配置）
 
 ### 胶囊标签形状统一（用户反馈：页面标签"太尖锐"，同 V0.1.1 顶栏问题）

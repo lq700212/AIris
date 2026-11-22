@@ -42,26 +42,12 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- 画面 + 叠加层（库 KxImageStage 取像舞台：舞台底/网格/扫描光带，宿主子元素直接落 Children；
-                         Canvas 由 code-behind 画框——控件即 Grid，ActualWidth/Height 与 SizeChanged 口径不变） -->
-                    <ui:KxImageStage Grid.Row="0" x:Name="StageGrid" SizeChanged="Stage_SizeChanged">
-                        <Image x:Name="StageImage" Source="{Binding FrameImage}" Stretch="Uniform"/>
-                        <Canvas x:Name="OverlayCanvas" IsHitTestVisible="False"/>
-                        <!-- 空态（无画面） -->
-                        <TextBlock Text="等待画面…" HorizontalAlignment="Center" VerticalAlignment="Center"
-                                   Foreground="{DynamicResource ThemeTextMuted}" FontSize="13">
-                            <TextBlock.Style>
-                                <Style TargetType="TextBlock">
-                                    <Setter Property="Visibility" Value="Collapsed"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding FrameImage}" Value="{x:Null}">
-                                            <Setter Property="Visibility" Value="Visible"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </TextBlock.Style>
-                        </TextBlock>
-                    </ui:KxImageStage>
+                    <!-- 画面 + 叠加层（库 KxImageStage 取像舞台 V2.3.6 傻瓜式：舞台底/网格/扫描/
+                         帧图/空态/叠加画布全内置——宿主只绑 FrameSource + 设 IdleText，
+                         叠加框 code-behind 取 Stage.Overlay 画；Mock 帧透明底，网格只在
+                         letterbox 与空态露出 = 全舞台一层网格+扫描（V0.1.5 口径）） -->
+                    <ui:KxImageStage Grid.Row="0" x:Name="StageGrid" SizeChanged="Stage_SizeChanged"
+                                     FrameSource="{Binding FrameImage}" IdleText="等待画面…"/>
 
                     <!-- 卡脚信息 -->
                     <Grid Grid.Row="1" Margin="2,10,2,0">

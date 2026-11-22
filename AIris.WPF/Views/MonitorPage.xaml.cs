@@ -10,12 +10,17 @@ namespace AIris.WPF.Views
 {
     /// <summary>
     /// 运行监控台 glue：DataContext 绑 VM + 叠加框绘制（DrawBoxes）。
-    /// 叠加框按"画面实际渲染区"比例绘制：Image Stretch=Uniform 且 Mock 帧固定 4:3（1280×960），
-    /// 渲染区 = StageGrid 内接矩形；检测框 0~1000 归一化 → 渲染区像素。
+    /// V0.1.5：取像显示迁库 KxImageStage 傻瓜式（FrameSource 绑 FrameImage、IdleText 空态、
+    /// Stage.Overlay 叠加），页面不再自装 Image/空态/Canvas。
+    /// 叠加框按"画面实际渲染区"比例绘制：帧 Stretch=Uniform 且 Mock 帧固定 4:3（1280×960），
+    /// 渲染区 = 舞台内接矩形；检测框 0~1000 归一化 → 渲染区像素。
     /// </summary>
     public partial class MonitorPage : UserControl
     {
         private MonitorViewModel _vm;
+
+        /// <summary>取像舞台（x:Name 即 StageGrid；Stage 别名指同对象，code-behind 语义直白）。</summary>
+        public Kaleidoscope.UI.Views.KxImageStage Stage => StageGrid;
 
         public MonitorPage()
         {
@@ -65,13 +70,16 @@ namespace AIris.WPF.Views
 
         private void Stage_SizeChanged(object sender, SizeChangedEventArgs e) { RedrawBoxes(); }
 
-        /// <summary>重绘叠加框：清空 Canvas → 按 VM.Boxes 逐个画（主色描边 + 类目标签，无置信度）。</summary>
+        /// <summary>重绘叠加框：清空 Overlay → 按 VM.Boxes 逐个画（主色描边 + 类目标签，无置信度）。
+        /// V0.1.5：叠加画布换库 KxImageStage 内置 Overlay（Stage.Overlay），画面渲染区 =
+        /// 舞台（本控件）内接矩形，口径与旧 StageGrid 一致。</summary>
         private void RedrawBoxes()
         {
-            OverlayCanvas.Children.Clear();
+            var canvas = Stage.Overlay;
+            canvas.Children.Clear();
             if (_vm == null || _vm.Boxes.Count == 0) return;
 
-            // 画面渲染区：StageGrid 内接 4:3 矩形（Mock 帧固定 1280×960）
+            // 画面渲染区：舞台内接 4:3 矩形（Mock 帧固定 1280×960）
             double gw = StageGrid.ActualWidth, gh = StageGrid.ActualHeight;
             if (gw < 10 || gh < 10) return;
             double rw = Math.Min(gw, gh * 4.0 / 3.0);
@@ -108,7 +116,7 @@ namespace AIris.WPF.Views
                     Margin = new Thickness(3, -1, 0, 0)
                 };
                 box.Child = label;
-                OverlayCanvas.Children.Add(box);
+                canvas.Children.Add(box);
             }
         }
     }

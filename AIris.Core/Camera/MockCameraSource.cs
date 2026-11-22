@@ -67,40 +67,29 @@ namespace AIris.Core.Camera
             }
         }
 
-        /// <summary>合成一帧：台面底色 → 按类目绘制在场零件（与 PartLayout 同源坐标）。</summary>
-        private Bitmap Compose()
+    /// <summary>合成一帧：透明底（V0.1.5 口径：台面装饰=舞台一层网格+扫描，Mock 帧只画
+    /// 零件，对齐真实监控视频"画面不带装饰"的事实——设计稿 .cam-img 网格在舞台层不随帧走）。
+    /// 零件按类目绘制（与 PartLayout 同源坐标）。</summary>
+    private Bitmap Compose()
+    {
+        var bmp = new Bitmap(W, H);   // GDI+ 默认 32bppArgb，透明底保 alpha
+        using (var g = Graphics.FromImage(bmp))
+        using (var font = new Font("Microsoft YaHei UI", 13f, FontStyle.Regular, GraphicsUnit.Pixel))
         {
-            var bmp = new Bitmap(W, H);
-            using (var g = Graphics.FromImage(bmp))
-            using (var font = new Font("Microsoft YaHei UI", 13f, FontStyle.Regular, GraphicsUnit.Pixel))
+            g.SmoothingMode = SmoothingMode.AntiAlias;
+            g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;   // 透明底 ClearType 会出脏边，改灰度抗锯齿
+
+            // 按类目绘制在场零件（类目固定一组颜色/画法，演示辨识度）
+            foreach (var cat in MockScene.PartLayout.Keys)
             {
-                g.SmoothingMode = SmoothingMode.AntiAlias;
-                g.TextRenderingHint = TextRenderingHint.ClearTypeGridFit;
-
-                // 台面：浅灰底 + 网格（工位俯拍质感）
-                using (var bg = new LinearGradientBrush(new Rectangle(0, 0, W, H), Color.FromArgb(246, 242, 238), Color.FromArgb(232, 226, 220), 90f))
-                    g.FillRectangle(bg, 0, 0, W, H);
-                using (var gridPen = new Pen(Color.FromArgb(220, 214, 206)))
+                foreach (var box in MockScene.Instance.BoxesOf(cat))
                 {
-                    for (int x = 0; x < W; x += 64) g.DrawLine(gridPen, x, 0, x, H);
-                    for (int y = 0; y < H; y += 64) g.DrawLine(gridPen, 0, y, W, y);
+                    DrawPart(g, font, cat, box);
                 }
-
-                // 按类目绘制在场零件（类目固定一组颜色/画法，演示辨识度）
-                foreach (var cat in MockScene.PartLayout.Keys)
-                {
-                    foreach (var box in MockScene.Instance.BoxesOf(cat))
-                    {
-                        DrawPart(g, font, cat, box);
-                    }
-                }
-
-                // 视野水印（对位设计稿画面占位文案）
-                using (var wm = new SolidBrush(Color.FromArgb(150, 120, 110, 100)))
-                    g.DrawString("2592 × 1944 · Mock 合成 · " + DateTime.Now.ToString("HH:mm:ss"), font, wm, 16, H - 30);
             }
-            return bmp;
         }
+        return bmp;
+    }
 
         /// <summary>单零件绘制：归一化框 → 画布矩形，按类目画形。</summary>
         private static void DrawPart(Graphics g, Font font, string cat, int[] b)
