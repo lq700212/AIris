@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- 方案 D「对话瞳」：瞳孔即对话气泡 —— 一句话（气泡）教会 AI（气泡内的神经网络节点）盯现场。
+       Slogan「一句话，教会 AI 盯现场」的直译图形，"自然语言驱动"卖点最强。 -->
+  <defs>
+    <linearGradient id="gD" x1="0" y1="0" x2="128" y2="128" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#F59E0B"/>
+      <stop offset="0.5" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#gD)"/>
+  <!-- 气泡主体（白圆）+ 右下气泡尾巴，同色重叠无缝衔接 -->
+  <circle cx="64" cy="56" r="33" fill="#FFFFFF"/>
+  <path d="M70 86 Q92 92 102 103 Q86 95 78 78 Z" fill="#FFFFFF"/>
+  <!-- 气泡内神经网络三角（渐变色透白：一句话变成本地 AI 的视觉网络） -->
+  <g fill="none" stroke="url(#gD)" stroke-width="4" stroke-linecap="round">
+    <line x1="64" y1="44" x2="51" y2="64"/>
+    <line x1="64" y1="44" x2="77" y2="64"/>
+    <line x1="51" y1="64" x2="77" y2="64"/>
+  </g>
+  <g fill="url(#gD)">
+    <circle cx="64" cy="44" r="5"/>
+    <circle cx="51" cy="64" r="5"/>
+    <circle cx="77" cy="64" r="5"/>
+  </g>
+</svg>

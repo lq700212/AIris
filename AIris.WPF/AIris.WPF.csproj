@@ -14,7 +14,16 @@
     <!-- 输出目录 = 运行目录（INI/配方/审计都在 exe 目录树下） -->
     <OutputPath>..\00_ExeBuild\</OutputPath>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <!-- exe 内嵌图标（资源管理器/桌面快捷方式/任务栏固定显示的是这张）；
+         运行窗口图标另见 MainWindow.xaml 的 Window.Icon（两者是独立的两件事，都要设） -->
+    <ApplicationIcon>Assets\app.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Window.Icon 运行时加载用（任务栏/Alt-Tab/标题栏运行态）：ico 必须打成 Resource，
+         ApplicationIcon 不会自动内嵌为 WPF Resource -->
+    <Resource Include="Assets\app.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <!-- Core 纯逻辑层 -->

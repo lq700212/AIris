@@ -59,15 +59,15 @@ powershell -File Tools\probe_ng_semantic.ps1
 
 ```mermaid
 graph LR
-    subgraph AIris.WPF（MVVM 壳）
-        UI[运行监控台 / 配方 / 引擎 / 审计 / 设备]
+    subgraph WPF["AIris.WPF（MVVM 壳）"]
+        UI["运行监控台 / 配方 / 引擎 / 审计 / 设备"]
     end
-    subgraph AIris.Core（纯逻辑）
-        CAM[ICameraSource 采集] --> MON[RunMonitor 编排]
-        MON --> ENG[IDetectionEngine 检测]
-        MON --> JUDGE[JudgeEngine 判定]
-        MON --> STEP[WorkstepEngine 工步状态机]
-        MON --> AUD[IAuditStore 存档]
+    subgraph CORE["AIris.Core（纯逻辑）"]
+        CAM["ICameraSource 采集"] --> MON["RunMonitor 编排"]
+        MON --> ENG["IDetectionEngine 检测"]
+        MON --> JUDGE["JudgeEngine 判定"]
+        MON --> STEP["WorkstepEngine 工步状态机"]
+        MON --> AUD["IAuditStore 存档"]
     end
     UI --> MON
 ```

@@ -2,6 +2,36 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.2（2026-11-22）品牌图标定版换全：C 方案「鸢尾绽放」（用户选定）
+
+### 换全三面（exe 资源 / 运行窗口 / 界面品牌位）+ 快捷方式
+
+- **用户从六款候选中选定 C 方案「鸢尾绽放」**（三瓣水滴花 120° 旋转 + 中心瞳点，Iris
+  双关的花形表达）；`docs/branding/icons/logo-c-iris-bloom/` 的 7 帧 ICO（16~256）
+  拷入 `AIris.WPF\Assets\app.ico`（Assets 目录此前从未落地，本次新建）；
+- **① exe 内嵌图标**：csproj 新增 `<ApplicationIcon>Assets\app.ico</ApplicationIcon>`；
+  验证：`ExtractAssociatedIcon` 提取 exe 图标 = 鸢尾绽放 ✓（资源管理器/桌面快捷方式/
+  任务栏固定显示此面）；
+- **② 运行窗口图标（任务栏运行态/Alt-Tab/窗口标题栏）**：MainWindow 根元素新增
+  `Icon="/Assets/app.ico"` + csproj `<Resource Include="Assets\app.ico">`——
+  【坑】ApplicationIcon 只管 exe 文件图标，**不会自动成 WPF Resource**，缺 Resource
+  Include 则 XAML 的 Icon 运行时加载失败；启动实检任务栏 32px 帧显示鸢尾绽放 ✓；
+- **③ 顶栏品牌位**：原「Border 半透白底 + ◉ 占位字符」换成鸢尾绽放**同源矢量**
+  （Viewbox + Canvas 128：三 Path 各带 120° RotateTransform + 中心 Ellipse r7，
+  与转换前 SVG 完全同几何）——去半透垫、白花直接嵌顶栏渐变（对齐 app icon
+  「渐变底+白符号」口径，随 Viewbox 无损缩放）；截图目检 26px 白花清晰 ✓；
+- **桌面快捷方式**：新建「AI 智瞳.lnk」指向 00_ExeBuild exe（图标继承 exe 内嵌）；
+- 弹窗无需逐个设图标：库 ChromeDialogWindow 标题条走 TitleIconChar 设计字形、
+  不读 Window.Icon 且弹窗不上任务栏/Alt-Tab；
+- **换标经验沉 ui-mockup-studio logo-playbook 第 4 节「换图标=换全」三面清单**
+  （exe≠窗口图标两件事 / Resource Include 坑 / 图标缓存重建 / 品牌位占位符必换）；
+- **顺带修复：README 架构图 GitHub 渲染异常**——mermaid `subgraph AIris.WPF（MVVM 壳）`
+  未引号+全角括号 = parse error（本地 mermaid 10.9.8 对照截图实锤 Syntax error 炸弹图）；
+  修复 = subgraph 改 `id["label"]` 形式 + 全部节点 label 引号化；
+- **设计资产沉淀**：六款候选 SVG + 选款预览页（preview.html 手写语义版 /
+  logo_preview.html 脚本生成版）+ 全款转换资源（icons/ 每款 PNG 512~16 阶梯 + 7 帧 ICO）
+  全部落 `docs/branding/`；转换链路已沉 ui-mockup-studio skill V1.4.0（svg2res.py）。
+
 ## V0.1.1（2026-11-22）壳重构：菜单收拢进顶栏 + 三窗钮 + README + 控件复用纪律沉淀
 
 ### 顶栏两 bug 返工：点击无响应 + 胶囊形状（用户实点反馈）

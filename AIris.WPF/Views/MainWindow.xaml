@@ -37,6 +37,7 @@
                              WindowState="Maximized"
                              CaptionHeight="52"
                              Title="AI 智瞳"
+                             Icon="/Assets/app.ico"
                              MinWidth="1200" MinHeight="760"
                              Background="{DynamicResource ThemeWindowBg}">
     <Window.Resources>
@@ -101,11 +102,26 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- 品牌：logo + 名称（WindowChrome 拖动区） -->
+                <!-- 品牌：logo + 名称（WindowChrome 拖动区）。品牌标 = C 方案「鸢尾绽放」矢量
+                     （与 Assets\app.ico 同源几何：三瓣水滴花绕 120° 旋转 + 中心瞳点；顶栏橙粉
+                     渐变即图标底板同源色，白色符号对齐 app icon 口径，随 Viewbox 无损缩放） -->
                 <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,6,0" VerticalAlignment="Center">
-                    <Border Width="26" Height="26" CornerRadius="8" Background="#66FFFFFF" VerticalAlignment="Center">
-                        <TextBlock Text="◉" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
+                    <Viewbox Width="26" Height="26" VerticalAlignment="Center">
+                        <Canvas Width="128" Height="128">
+                            <Path Data="M64,24 C53,37 52,47 64,54 C76,47 75,37 64,24Z" Fill="White"/>
+                            <Path Data="M64,24 C53,37 52,47 64,54 C76,47 75,37 64,24Z" Fill="White">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="120" CenterX="64" CenterY="64"/>
+                                </Path.RenderTransform>
+                            </Path>
+                            <Path Data="M64,24 C53,37 52,47 64,54 C76,47 75,37 64,24Z" Fill="White">
+                                <Path.RenderTransform>
+                                    <RotateTransform Angle="240" CenterX="64" CenterY="64"/>
+                                </Path.RenderTransform>
+                            </Path>
+                            <Ellipse Canvas.Left="57" Canvas.Top="57" Width="14" Height="14" Fill="White"/>
+                        </Canvas>
+                    </Viewbox>
                     <TextBlock Text="AI 智瞳" FontSize="15" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="AIris Monitor" FontSize="11" Foreground="#B3FFFFFF" Margin="8,1,0,0" VerticalAlignment="Center"/>
                 </StackPanel>

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <!-- 方案 B「光圈虹膜」：相机镜头光圈 6 叶片 + 虹膜外环。
+       Iris 双关的工业表达：既是"虹膜"（AI 之眼）也是"光圈"（工业相机），
+       中心六边形孔透出底板渐变 = 瞳孔。 -->
+  <defs>
+    <linearGradient id="gB" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#F59E0B"/>
+      <stop offset="0.5" stop-color="#F97316"/>
+      <stop offset="1" stop-color="#EC4899"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="30" fill="url(#gB)"/>
+  <!-- 快门 6 片环形扇段叶片（每片占 54°、缝 6°，内缘 r13 透出渐变=瞳孔，外缘 r30） -->
+  <g fill="#FFFFFF">
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z"/>
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z" transform="rotate(60 64 64)"/>
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z" transform="rotate(120 64 64)"/>
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z" transform="rotate(180 64 64)"/>
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z" transform="rotate(240 64 64)"/>
+    <path d="M75.59 58.10 L90.74 50.38 A30 30 0 0 1 90.74 77.62 L75.59 69.90 A13 13 0 0 0 75.59 58.10 Z" transform="rotate(300 64 64)"/>
+  </g>
+  <!-- 虹膜外环 -->
+  <circle cx="64" cy="64" r="36" fill="none" stroke="#FFFFFF" stroke-width="6"/>
+</svg>
