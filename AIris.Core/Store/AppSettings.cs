@@ -24,9 +24,13 @@ namespace AIris.Core.Store
                 ActiveEngineId = _ini.Read("Engine", "ActiveEngineId", "mock"),
                 HttpBaseUrl = _ini.Read("Engine", "HttpBaseUrl", ""),
                 HttpModel = _ini.Read("Engine", "HttpModel", ""),
+                Protocol = _ini.Read("Engine", "Protocol", ""),         // 空 = 按引擎卡默认注入（EngineRegistry）
+                ApiKey = _ini.Read("Engine", "ApiKey", ""),
                 HttpTimeoutMs = ParseInt(_ini.Read("Engine", "HttpTimeoutMs", "5000"), 5000),
                 DecodeMode = _ini.Read("Engine", "DecodeMode", "hybrid"),
-                BatchSize = ParseInt(_ini.Read("Engine", "BatchSize", "8"), 8)
+                BatchSize = ParseInt(_ini.Read("Engine", "BatchSize", "8"), 8),
+                SemanticDecisionEnabled = _ini.ReadFlag("Engine", "SemanticDecisionEnabled", false),
+                SemanticBaseUrl = _ini.Read("Engine", "SemanticBaseUrl", "")
             };
         }
 
@@ -35,9 +39,13 @@ namespace AIris.Core.Store
             _ini.Write("Engine", "ActiveEngineId", cfg.ActiveEngineId);
             _ini.Write("Engine", "HttpBaseUrl", cfg.HttpBaseUrl);
             _ini.Write("Engine", "HttpModel", cfg.HttpModel);
+            _ini.Write("Engine", "Protocol", cfg.Protocol ?? "");
+            _ini.Write("Engine", "ApiKey", cfg.ApiKey ?? "");
             _ini.Write("Engine", "HttpTimeoutMs", cfg.HttpTimeoutMs.ToString());
             _ini.Write("Engine", "DecodeMode", cfg.DecodeMode);
             _ini.Write("Engine", "BatchSize", cfg.BatchSize.ToString());
+            _ini.Write("Engine", "SemanticDecisionEnabled", cfg.SemanticDecisionEnabled ? "ON" : "OFF");
+            _ini.Write("Engine", "SemanticBaseUrl", cfg.SemanticBaseUrl ?? "");
         }
 
         // —— 设备参数（[Camera]/[Light]/[Hmi]/[Mes]） ——

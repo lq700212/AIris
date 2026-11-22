@@ -9,11 +9,22 @@ namespace AIris.Core.Model
         /// <summary>当前引擎 id（mock / locateanything-http / qwen-vl-http，见 EngineRegistry）。</summary>
         public string ActiveEngineId { get; set; } = "mock";
 
-        /// <summary>HTTP 推理服务地址（未来 FastAPI 常驻服务，如 http://127.0.0.1:8100）。</summary>
+        /// <summary>推理服务地址（FastAPI 常驻服务 / vLLM / llama-server / Ollama，如 http://127.0.0.1:8000）。</summary>
         public string HttpBaseUrl { get; set; } = "";
 
-        /// <summary>HTTP 服务模型名（未来服务端路由用，如 locateanything-3b / qwen2.5-vl-7b）。</summary>
+        /// <summary>HTTP 服务模型名（服务端路由用，如 locateanything-3b / qwen2.5-vl-7b / llava）。</summary>
         public string HttpModel { get; set; } = "";
+
+        /// <summary>
+        /// 推理协议（V0.1.7 沉库 Kaleidoscope.Infer 后可切）：custom=自研 /detect 契约（默认）；
+        /// openai=OpenAI 兼容（vLLM/llama.cpp/LMDeploy）；anthropic=Anthropic /v1/messages；
+        /// ollama=Ollama 原生 /api/chat。默认按引擎：locateanything=custom、qwen-vl=openai
+        /// （EngineRegistry 建引擎时注入初值；用户可改下拉覆盖）。
+        /// </summary>
+        public string Protocol { get; set; } = "custom";
+
+        /// <summary>API Key（云服务/网关鉴权；本地服务留空）。</summary>
+        public string ApiKey { get; set; } = "";
 
         /// <summary>推理超时 ms（默认 5000：单帧 430ms 量级，留足余量）。</summary>
         public int HttpTimeoutMs { get; set; } = 5000;
@@ -23,6 +34,12 @@ namespace AIris.Core.Model
 
         /// <summary>批处理大小（对应 locateanything-batch，默认 8）。</summary>
         public int BatchSize { get; set; } = 8;
+
+        /// <summary>语义决策通道开关（V0.1.7 JEV 留口；默认关——云端决策不进离线主链路）。</summary>
+        public bool SemanticDecisionEnabled { get; set; } = false;
+
+        /// <summary>语义决策服务端点（Decisions 协议；空=未配置）。</summary>
+        public string SemanticBaseUrl { get; set; } = "";
     }
 
     /// <summary>

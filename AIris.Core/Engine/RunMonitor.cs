@@ -70,11 +70,19 @@ namespace AIris.Core.Engine
         private static readonly int DetectIntervalMs = 300;
 
         public RunMonitor(ICameraSource cam, IDetectionEngine engine, IAuditStore audit)
+            : this(cam, engine, audit, null)
+        {
+        }
+
+        /// <summary>全参构造（V0.1.7：语义决策服务可注入；null = NullSemanticDecisionService 空实现）。</summary>
+        public RunMonitor(ICameraSource cam, IDetectionEngine engine, IAuditStore audit, Detect.ISemanticDecisionService semantic)
         {
             _cam = cam;
             _engine = engine;
             _audit = audit;
+            _semantic = semantic ?? new Detect.NullSemanticDecisionService();
             _cam.FrameArrived += OnFrame;
+            _cam.FrameArrived += OnFramePreview;    // 纯预览直通（内部判 _previewOnly，非预览态零开销）
             _cam.Log += m => RaiseLog("[相机] " + m);
             _steps.StepChanged += (s, e) =>
             {
@@ -123,6 +131,7 @@ namespace AIris.Core.Engine
             if (_running) return;
             _running = true;
             _stop = false;
+            _previewOnly = false;   // 编辑页预览态自动退出（帧统一走 DetectLoop 透传，防双发）
             _cam.Start();
             _detectThread = new Thread(DetectLoop) { IsBackground = true, Name = "AIrisDetect" };
             _detectThread.Start();
@@ -179,10 +188,58 @@ namespace AIris.Core.Engine
         /// <summary>重检当前步（NG 挂起后人工处理完点这里）。</summary>
         public void Recheck() { _steps.Goto(_steps.CurrentIndex); }
 
+        // —— 仅预览取像（V0.1.7：配方编辑页 ROI 标画要"在实际取像上拖框"，但不应
+        //    强迫用户去监控台启动检测、也不该打扰监控台运行状态） ——
+
+        private volatile bool _previewOnly;     // 纯预览模式：相机帧不经检测线程直接透传 FrameReady
+
+        /// <summary>
+        /// 启动纯预览取像：只开相机（幂等），相机帧经 OnFramePreview 直接透传 FrameReady
+        /// （不走检测线程/判定，检测线程未起也出帧）。与 Start() 互不覆盖：检测运行中
+        /// 调用本方法是无害空操作（帧本来就经 DetectLoop 透传，画面同源）。
+        /// </summary>
+        public void StartPreview()
+        {
+            if (_running) { _previewOnly = false; return; }   // 检测已在跑：帧走 DetectLoop 透传，别双发
+            _previewOnly = true;
+            _cam.Start();
+            RaiseLog("[预览] 编辑页取像开启（仅预览，不做检测判定）");
+        }
+
+        /// <summary>停止纯预览取像：退出预览模式；检测未运行时顺手停相机（不留空转线程）。</summary>
+        public void StopPreview()
+        {
+            _previewOnly = false;
+            if (!_running)
+            {
+                _cam.Stop();
+                lock (_frameSync)   // 清掉预览期积压帧，防下次启动判定用旧帧
+                {
+                    var old = _latest;
+                    _latest = null;
+                    if (old != null) old.Dispose();
+                }
+            }
+            RaiseLog("[预览] 编辑页取像关闭");
+        }
+
+        /// <summary>纯预览帧直通：相机线程回调里直接透传 UI（8fps 低频，无需检测线程节拍）。
+        /// 与 OnFrame（喂检测线程）分流：非预览态立即返回零开销；预览态帧不进 _latest
+        /// 队列（检测线程即使误启也无帧可判，双保险）。</summary>
+        private void OnFramePreview(CameraFrame frame)
+        {
+            if (!_previewOnly) return;      // 非预览态：OnFrame 已处理，这里零开销返回
+            var h = FrameReady;
+            if (h != null) h(this, new FrameEventArgs { Image = frame.Image, IsEmptyScene = frame.IsEmptyScene, Detections = new List<Detection>() });
+            frame.Dispose();    // 预览直通：UI 侧 ToBitmapSource 已拷贝，帧即刻回收
+        }
+
         // —— 检测主循环 ——
 
         private void OnFrame(CameraFrame frame)
         {
+            if (_previewOnly) return;   // 纯预览态：帧走 OnFramePreview 直通，不进检测队列
+
             // 相机线程只做"换帧 + 唤醒"，慢活全在检测线程（相机线程零阻塞）
             lock (_frameSync)
             {
@@ -282,6 +339,44 @@ namespace AIris.Core.Engine
             return baseLine;
         }
 
+        // —— 语义决策留口（V0.1.7 JEV：默认 Null 恒"未启用"零开销；启用只换装配行） ——
+
+        /// <summary>语义决策服务（审计 NG 原因归纳增强；不进判定主链路，失败静默）。</summary>
+        private readonly Detect.ISemanticDecisionService _semantic;
+
+        /// <summary>
+        /// NG 落档时问一次语义归纳（漏装/错装/位置偏移/遮挡/其他）。
+        /// 未启用/失败一律返回 ""（审计主流程零依赖）；同步等待——本方法已在检测线程回调里，
+        /// 云调用 2s 超时可接受（只在 NG 最终落档瞬间发生，频率极低）。
+        /// </summary>
+        private string TrySemanticNote(RecipeStep step, VerdictEventArgs e)
+        {
+            if (_semantic == null || !_semantic.Enabled) return "";
+            try
+            {
+                string state = "工步：" + (step == null ? "?" : step.Name)
+                    + "；预期零件：" + (step == null ? "?" : step.ExpectedPart)
+                    + "；判定结果：" + e.Detail
+                    + "；规则：" + (step == null ? "" : WorkstepEngine.RuleSnapshot(step));
+                var q = new Detect.SemDecisionQuestion
+                {
+                    Type = Detect.SemQuestionType.Choice,
+                    Instructions = "这是工业装配防错的一次 NG，最可能的原因类别是？",
+                    Options = new System.Collections.Generic.Dictionary<string, string>
+                    {
+                        { "missing", "漏装（应装的零件没装/数量不足）" },
+                        { "wrong", "错装（装了别的零件或型号不对）" },
+                        { "shifted", "位置偏移（零件在但不在预期区域）" },
+                        { "occluded", "遮挡（零件被手/工具/反光遮住）" },
+                        { "other", "其他" },
+                    },
+                };
+                var a = _semantic.DecideAsync(state, q, CancellationToken.None).GetAwaiter().GetResult();
+                return (a != null && a.Ok && !string.IsNullOrEmpty(a.Choice)) ? a.Choice : "";
+            }
+            catch { return ""; }    // 云不可达等一切异常：静默跳过（增强不阻断主流程）
+        }
+
         /// <summary>步最终结论：落审计 + 截图 + NG 计数（订阅自 WorkstepEngine.Verdict 的收口）。</summary>
         private void OnStepVerdict(object sender, VerdictEventArgs e)
         {
@@ -318,7 +413,9 @@ namespace AIris.Core.Engine
                 NgReason = e.Pass ? "" : e.Detail,
                 RuleSnapshot = step == null ? "" : WorkstepEngine.RuleSnapshot(step),
                 ShotFile = shotFile,
-                EngineName = Engine == null ? "" : Engine.Name
+                EngineName = Engine == null ? "" : Engine.Name,
+                // 语义决策备注（V0.1.7 JEV 留口）：NG 时可选归纳原因——增强链路，失败静默不阻断
+                SemanticNote = e.Pass ? "" : TrySemanticNote(step, e),
             });
 
             // 最终判定结论进日志（运行日志面板 + 文件双出口；含引擎与存档号，追溯链入口）

@@ -2,6 +2,89 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.7（2026-11-22）ROI 拖拽标画 + 引擎通用协议层（沉库 Infer 五协议）+ JEV 语义决策留口
+
+### 一、配方编辑器 ROI 标画升级：在实际取像上拖拽标定（用户定版需求）
+
+- **取像控件统一（用户指出红框区应对齐主界面取像控件）**：编辑页 ROI 预览从
+  纯 Canvas（无帧底抽象框）升级为库 `KxImageStage`（与监控台同控件）+ "启动取像"
+  开关——`RunMonitor.StartPreview/StopPreview` 纯预览口（只开相机不出判定，
+  相机帧 OnFramePreview 直通 FrameReady；检测运行中调用为无害空操作防双发；
+  Start 自动退预览态）；编辑页 PreviewOn/FrameImage（Dispatcher 收口转
+  BitmapSource，口径同 MonitorViewModel.OnFrame）；
+- **鼠标拖拽三件**（RoiStage.Overlay 上，命中优先级 手柄>已有框>空白）：
+  ①拖框移动（起点坐标快照 + Δpx→Δ归一化实时回写）②四角手柄缩放（拖哪角哪角动、
+  对角锚定、过角翻转）③空白拖画新框（橡皮筋预览，松手 ≥15×15 归一化落框
+  AddRoiAt 自动编号选中，过小防误触放弃）；
+- **数值双向联动修复**（旧版数值框改 X/Y/W/H 画布不刷新）：RoiVm INPC 三路
+  订阅（选中 ROI 属性 + SelectedRoi 引用 + 集合变化）统一走 RedrawRois；
+- **坐标换算抽 FrameRect 共用**（Views\FrameRect.cs）：按帧实际像素宽高求
+  Uniform letterbox 内接矩形——监控台旧 4:3 硬编码同步替换（真机换分辨率零改动）；
+- **关联缺口一次改干净**（铁律 8）："判定区域"下拉从硬编码 ROI-A~D 改绑
+  Rois 集合同源（ChoiceItem，全画面空选项保留）；左侧 ROI 清单选中高亮修复
+  （旧 DataTrigger 绑 ContentPresenter.IsSelected 属性不存在恒不触发，改绑
+  VM IsSelected + SelectedRoi setter 维护）；
+- **沉库 V2.3.7**：KxImageStage 内置 Overlay 构造 `Collapsed+IsHitTestVisible=false`
+  且从未翻开（V2.3.6 遗留缺陷——监控台检测框此前实际也没显示出来）改恒可见+可命中，
+  `_idle` 空态文本补 IsHitTestVisible=false（居中文本区不吞点击）。
+
+### 二、引擎页功能补完 + 通用推理协议层（沉库 Kaleidoscope.Infer V2.4.0）
+
+- **真 Bug 修复：弹窗返回值断裂**——`ConfirmDialog`/`NewRecipeDialog` 点确认只设
+  自定义 `Result` 属性，`ShowDialog() == true` 恒 false：**"切换引擎没反应"的根因**
+  （确认弹窗后静默 return），删除确认/新建配方返回值同样隐性失效；改设
+  `DialogResult = true`。实测：切换 Mock→Qwen→LocateAnything→Mock 四次全通；
+- **沉库 `Kaleidoscope.Infer`**（主库 Infer\ 目录，命名空间 Kaleidoscope.Infer，
+  零第三方依赖：JSON 手拼/轻扫 + BCL System.Net.Http + TLS1.2 静态收口，图像
+  JPEG byte[] 过接口不引 System.Drawing）：
+  - `InferEndpoint`（协议/地址/模型/Key/超时）+ `IInferTransport`/`InferTransportBase`
+    （POST/GET 收口，失败转 Ok=false 不抛异常——检测线程 GetResult 口径）；
+  - 四视觉协议 transport（信封差异收口，语义统一"图+提示→文本"）：
+    **OpenAi**（/v1/chat/completions，image_url=data URI，Bearer）、
+    **Anthropic**（/v1/messages，base64 source 块 + x-api-key/anthropic-version 头 +
+    system 顶层字段，content[].text 拼接）、**Ollama**（/api/chat stream:false，
+    images=**裸 base64 数组**非 data URL）、**CustomJson**（POST /detect 自研契约
+    {model,prompts,image_b64}→{ok,detections[]}，调研报告 §10.2 既定，框直出）；
+  - `BoxParser`：回包文本 → 0~1000 归一化框。策略①JSON bbox_2d 数组（Qwen2.5-VL
+    grounding 默认形态，容 ```json 围栏）②\<box\> 标签（LocateAnything 文本形态两种
+    写法）；钳位/端点校正/零面积丢弃；**无置信度字段（语义红线）**；
+  - `InferClient` 门面：DetectAsync（三句式 grounding prompt：输出 JSON bbox_2d、
+    坐标 0~1000 归一化、只输出 JSON）+ ProbeAsync 探活（openai:/v1/models、
+    ollama:/api/tags、custom:/health、anthropic:配置即就绪）；
+- **HttpDetectionEngine 桩→薄适配**：持有 InferClient；Load=同步探活（失败不抛
+  显示降级态，口径不变）；EngineConfig 加 Protocol/ApiKey（INI [Engine] 落盘；
+  引擎卡默认协议注入 locateanything=custom、qwen-vl=openai）；EngineRegistry
+  Create 带 cfg 协议初值注入；
+- **引擎页 UI**：推理协议下拉（四协议注解部署形态）+ API Key 框 + "测试连接"
+  按钮（表单当前值 ProbeAsync 报结果/耗时，空地址友好报错——实测通）+
+  Apply 改"落盘+HTTP 引擎热重载重探活"（旧版只落盘不生效）+ 解码模式/批处理
+  仅 custom 协议可编辑（其余灰显+提示属服务端参数）。
+
+### 三、JEV 语义决策留口（调研结论：不进生产、不碰判定链）
+
+- **调研结论**：JEV 是 TypeSafe 云端文本决策模型（Decisions API：Choice/Score/Noul
+  三题型 + 校准概率）——**无图像输入**（官方"Images not supported (yet)"）、闭源
+  无本地权重，与 AIris 全本地离线红线错位；"语义识别"主战场（图→零件框）是
+  LocateAnything/Qwen2.5-VL 的职责，JEV 进不去；判定链永远走确定性几何规则。
+  **结论：不做生产接入，留三层低成本口子**：
+  - 沉库第五协议 `DecisionsTransport`（兼容 TypeSafe /v1/systemone 与 OpenRouter
+    /api/alpha/decisions 端点，choice/noul 组包解包）；
+  - Core 扩展点 `ISemanticDecisionService`（Choice/Noul 最小模型）+ 默认
+    `NullSemanticDecisionService`（恒"未启用"零开销不联网）；RunMonitor 构造可注入；
+  - 唯一应用点：审计 NG 原因归纳增强（落 NG 档时问一道 Choice：漏装/错装/位置
+    偏移/遮挡/其他 → AuditRecord 新增 `SemanticNote` 可选字段；失败静默不阻断；
+    INI `SemanticDecisionEnabled=OFF` 默认关——实测默认关=行为与现状一致）。
+
+### 验证
+
+- MSBuild 整编 0 error（Kaleidoscope/Core/WPF 四工程级联）；
+- `Tools\probe_ng_semantic.ps1` 全绿（NG-SEMANTIC-OK）；
+- 实点回归（click_ui.ps1 + agent-desktop）：编辑页启动取像→垫板出现在 ROI-A 框内
+  （取像与 ROI 同源对齐）→ 点框选中（橙描边+四角手柄+清单高亮+数值跟随 X/Y/W/H）
+  → 拖动移框（X 60→735 实测生效）→ 空白拖画新框（落框自动选中）→ 引擎页切换
+  弹窗→真切换（卡高亮/副题/协议回填/灰显联动）→ 测试连接（空地址/真实地址两态
+  友好降级）→ 明暗主题键全走 Theme* 无写死色。
+
 ## V0.1.6（2026-11-22）🧠 引擎图标 + 网格 64px + 空场扫描动效恢复（用户三项定版）
 
 - **导航/页头图标 `⚙`→`🧠`（三处同语义层同步）**：顶栏导航胶囊（EngineViewModel.Icon，

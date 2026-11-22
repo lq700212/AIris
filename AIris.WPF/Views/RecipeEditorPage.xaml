@@ -6,9 +6,11 @@
   │ 工步序列卡    │ 工步配置卡：工步名 / 预期零件(自然语言,主色描边)      │
   │ (选中高亮)    │            预期变化 / 判定区域                       │
   │ [+ 添加工步]  │ 判定规则卡：IoU 阈值 / 稳定帧数 / 数量 / 双通道开关   │
-  │ ROI 清单卡    │ ROI 预览卡：0~1000 归一化框叠加 + 数值编辑            │
+  │ ROI 清单卡    │ ROI 标画卡：KxImageStage 取像 + 拖拽标画 + 数值编辑   │
   └──────────────┴────────────────────────────────────────────────────┘
   自然语言预期零件是本页核心（改一句话换检测目标，零训练）。
+  V0.1.7：ROI 预览升级为"在实际取像上拖拽标画"（KxImageStage 同监控台取像控件，
+  启动取像只开相机不做检测；拖框移动/拖角缩放/空白画新框，数值双向联动）。
 -->
 <UserControl x:Class="AIris.WPF.Views.RecipeEditorPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -88,11 +90,16 @@
                         <ItemsControl ItemsSource="{Binding Rois}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate>
-                                    <Border Padding="12,6" Margin="4,1" CornerRadius="8" Background="Transparent" Cursor="Hand">
+                                    <Border Padding="12,6" Margin="4,1" CornerRadius="8" Cursor="Hand">
                                         <Border.Style>
                                             <Style TargetType="Border">
+                                                <Setter Property="Background" Value="Transparent"/>
                                                 <Style.Triggers>
-                                                    <DataTrigger Binding="{Binding IsSelected, RelativeSource={RelativeSource AncestorType=ContentPresenter}}" Value="True"/>
+                                                    <!-- 选中高亮绑 VM.IsSelected（旧写法绑 ContentPresenter.IsSelected
+                                                         属性不存在恒不触发，选中行从未高亮过——2026-11-22 修复） -->
+                                                    <DataTrigger Binding="{Binding IsSelected}" Value="True">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
+                                                    </DataTrigger>
                                                 </Style.Triggers>
                                             </Style>
                                         </Border.Style>
@@ -153,13 +160,8 @@
                                 </ComboBox>
                                 <TextBlock Grid.Column="1" Text="" />
                                 <ComboBox Grid.Column="2" Style="{DynamicResource FreshCombo}" FontSize="12" Padding="10,7"
-                                          SelectedValue="{Binding EditRoiId}" SelectedValuePath="Tag" IsEnabled="{Binding CountEnabled}">
-                                    <ComboBoxItem Tag="" Content="全画面（整检步固定）"/>
-                                    <ComboBoxItem Tag="ROI-A" Content="ROI-A"/>
-                                    <ComboBoxItem Tag="ROI-B" Content="ROI-B"/>
-                                    <ComboBoxItem Tag="ROI-C" Content="ROI-C"/>
-                                    <ComboBoxItem Tag="ROI-D" Content="ROI-D"/>
-                                </ComboBox>
+                                          SelectedValue="{Binding EditRoiId}" SelectedValuePath="Tag" IsEnabled="{Binding CountEnabled}"
+                                          ItemsSource="{Binding RoiChoices, RelativeSource={RelativeSource AncestorType=UserControl}}"/>
                             </Grid>
                         </Grid>
                     </StackPanel>
@@ -195,12 +197,26 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ROI 预览卡（归一化框叠加 + 数值编辑） -->
+                <!-- ROI 预览卡（V0.1.7：取像舞台 KxImageStage 实时画面 + 鼠标拖拽标画 ROI。
+                     启动取像 = 只开相机不做检测（RunMonitor.StartPreview），画面上：
+                     拖框移动 / 四角手柄缩放 / 空白拖画新框；右侧 X/Y/W/H 数值双向联动） -->
                 <Border Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="18,14" Margin="0,12,0,0" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
-                        <TextBlock Text="ROI 预览（数值标画）" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                        <Border Background="{DynamicResource ThemePanel2Bg}" CornerRadius="12" Height="220" Margin="0,10,0,0" ClipToBounds="True">
-                            <Canvas x:Name="RoiCanvas"/>
+                        <Grid>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="ROI 标画（在实际取像上拖拽标定）" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
+                                <TextBlock Text="拖框移动 · 拖角缩放 · 空白拖画新框" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,1,0,0"/>
+                            </StackPanel>
+                            <Button Content="{Binding PreviewToggleText}" Command="{Binding TogglePreviewCommand}"
+                                    Style="{DynamicResource FreshPrimaryButton}" FontSize="11.5" Padding="14,5"
+                                    HorizontalAlignment="Right" Cursor="Hand"/>
+                        </Grid>
+                        <Border Background="{DynamicResource ThemePanel2Bg}" CornerRadius="12" Height="240" Margin="0,10,0,0" ClipToBounds="True">
+                            <ui:KxImageStage x:Name="RoiStage" xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
+                                             GridStep="64" SizeChanged="RoiStage_SizeChanged"
+                                             MouseMove="RoiStage_MouseMove" MouseLeftButtonUp="RoiStage_MouseUp"
+                                             Background="Transparent"
+                                             FrameSource="{Binding FrameImage}" IdleText="点「启动取像」出画面，然后在画面上拖拽标画 ROI…"/>
                         </Border>
                         <Grid Margin="0,10,0,0">
                             <Grid.ColumnDefinitions>

@@ -21,7 +21,23 @@ namespace AIris.WPF.ViewModels
         public int H { get { return Model.H; } set { Model.H = Clamp(value); OnPropertyChanged(); } }
         public string Display { get { return Model.Id + " · " + Model.Name; } }
 
+        private bool _isSelected;
+        /// <summary>左侧清单选中高亮（由编辑器 VM 的 SelectedRoi setter 统一维护）。</summary>
+        public bool IsSelected
+        {
+            get { return _isSelected; }
+            set { SetProperty(ref _isSelected, value); }
+        }
+
         private static int Clamp(int v) { return Math.Max(0, Math.Min(1000, v)); }
+    }
+
+    /// <summary>通用"值/显示"选项行（判定区域下拉等；Tag=写回值，Content=显示文案）。</summary>
+    public class ChoiceItem
+    {
+        public string Tag { get; private set; }
+        public string Content { get; private set; }
+        public ChoiceItem(string tag, string content) { Tag = tag; Content = content; }
     }
 
     /// <summary>工步序列行（编辑器左列；选中态高亮）。</summary>
@@ -78,6 +94,9 @@ namespace AIris.WPF.ViewModels
             GoMonitorCommand = new RelayCommand(() => ServiceHub.Main.Go("monitor"));
             SelectStepCommand = new RelayCommand(p => SelectedStep = p as EditorStepRowVm);
             SelectRoiCommand = new RelayCommand(p => SelectedRoi = p as RoiVm);
+            TogglePreviewCommand = new RelayCommand(() => PreviewOn = !PreviewOn);
+            // ROI 集合增删 → "判定区域"下拉选项刷新（RoiChoices 每次 get 重建，集合变时广播即可）
+            Rois.CollectionChanged += (s, e) => OnPropertyChanged(nameof(RoiChoices));
         }
 
         // —— 序列与编辑字段 ——
@@ -104,7 +123,24 @@ namespace AIris.WPF.ViewModels
         public RoiVm SelectedRoi
         {
             get { return _selectedRoi; }
-            set { SetProperty(ref _selectedRoi, value); OnPropertyChanged(nameof(HasSelection)); }
+            set
+            {
+                if (_selectedRoi != null) _selectedRoi.IsSelected = false;   // 旧选中行去高亮
+                if (SetProperty(ref _selectedRoi, value) && _selectedRoi != null)
+                    _selectedRoi.IsSelected = true;                          // 新选中行高亮（左侧清单）
+                OnPropertyChanged(nameof(HasSelection));
+            }
+        }
+
+        /// <summary>"判定区域"下拉选项（全画面 + 实际 ROI 清单同源——旧硬编码 ROI-A~D 与集合脱节）。</summary>
+        public System.Collections.Generic.List<ChoiceItem> RoiChoices
+        {
+            get
+            {
+                var list = new System.Collections.Generic.List<ChoiceItem> { new ChoiceItem("", "全画面（整检步固定）") };
+                foreach (var r in Rois) list.Add(new ChoiceItem(r.Id, r.Id));
+                return list;
+            }
         }
 
         private string _recipeName = "";
@@ -193,6 +229,61 @@ namespace AIris.WPF.ViewModels
         public ICommand GoMonitorCommand { get; }
         public ICommand SelectStepCommand { get; }
         public ICommand SelectRoiCommand { get; }
+        public ICommand TogglePreviewCommand { get; }
+
+        // —— ROI 标画实时预览（V0.1.7：编辑页直接开相机出画面，ROI 在实际取像上拖拽标定） ——
+
+        private bool _previewOn;
+        /// <summary>预览取像开关（开 = 订阅 RunMonitor.FrameReady + StartPreview 只开相机不判定；
+        /// 关 = StopPreview 顺手停相机——检测未运行时不留空转线程）。</summary>
+        public bool PreviewOn
+        {
+            get { return _previewOn; }
+            set
+            {
+                if (SetProperty(ref _previewOn, value))
+                {
+                    if (value)
+                    {
+                        if (!_frameHooked)
+                        {
+                            _frameHooked = true;
+                            ServiceHub.Monitor.FrameReady += OnPreviewFrame;
+                        }
+                        ServiceHub.Monitor.StartPreview();
+                    }
+                    else
+                    {
+                        ServiceHub.Monitor.StopPreview();
+                        FrameImage = null;   // 回空态（IdleText + 扫描动效恢复）
+                    }
+                    OnPropertyChanged(nameof(PreviewToggleText));
+                }
+            }
+        }
+
+        /// <summary>开关按钮文案（设计稿"拖拽标画 ROI"口径的入口）。</summary>
+        public string PreviewToggleText { get { return _previewOn ? "停止取像" : "启动取像"; } }
+
+        private bool _frameHooked;
+        /// <summary>预览帧（BitmapSource，Freeze 后跨线程安全；KxImageStage.FrameSource 绑定源）。</summary>
+        private System.Windows.Media.Imaging.BitmapSource _frameImage;
+        public System.Windows.Media.Imaging.BitmapSource FrameImage
+        {
+            get { return _frameImage; }
+            private set { SetProperty(ref _frameImage, value); }
+        }
+
+        /// <summary>预览帧到达（相机线程 → Dispatcher 收口转 BitmapSource；口径同 MonitorViewModel.OnFrame）。</summary>
+        private void OnPreviewFrame(object s, AIris.Core.Engine.FrameEventArgs e)
+        {
+            var img = Imaging.ToBitmapSource(e.Image);
+            var empty = e.IsEmptyScene;   // Mock 空场透传：UI 回无帧空态（口径与监控台一致）
+            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                FrameImage = empty ? null : (img ?? FrameImage);
+            }));
+        }
 
         public override void OnEnter()
         {
@@ -290,6 +381,15 @@ namespace AIris.WPF.ViewModels
             // 新 ROI 默认放画面中部空白（0~1000 归一化），编辑器里改数值
             int n = Rois.Count + 1;
             var roi = new ROIRect { Id = "ROI-" + (char)('A' + Rois.Count % 26), Name = "区域 " + n, X = 360, Y = 420, W = 260, H = 220 };
+            _recipe.Rois.Add(roi);
+            Rois.Add(new RoiVm(roi));
+            SelectedRoi = Rois.LastOrDefault();
+        }
+
+        /// <summary>画布上拖拽画新框后落点（V0.1.7：AddRoi 带坐标重载；自动命名+选中新建框）。</summary>
+        public void AddRoiAt(int x, int y, int w, int h)
+        {
+            var roi = new ROIRect { Id = "ROI-" + (char)('A' + Rois.Count % 26), Name = "区域 " + (Rois.Count + 1), X = x, Y = y, W = w, H = h };
             _recipe.Rois.Add(roi);
             Rois.Add(new RoiVm(roi));
             SelectedRoi = Rois.LastOrDefault();

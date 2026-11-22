@@ -23,7 +23,6 @@ namespace AIris.WPF.Views
     public partial class NewRecipeDialog : Kaleidoscope.UI.Views.ChromeDialogWindow
     {
         private Recipe _draft;
-        public bool Result { get; private set; }
         private int _step = 1;
 
         public NewRecipeDialog()
@@ -51,7 +50,7 @@ namespace AIris.WPF.Views
             try
             {
                 ServiceHub.Recipes.Save(_draft);
-                Result = true;
+                DialogResult = true;    // ShowDialog() 返回值只认它（旧设自定义属性恒 false——同 ConfirmDialog 修复）
                 Close();
             }
             catch (Exception ex)

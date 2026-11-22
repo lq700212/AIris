@@ -64,12 +64,13 @@ namespace AIris.WPF.Services
             Recipes = new RecipeStore();
 
             var cam = new MockCameraSource();
-            var engine = EngineRegistry.Create(Settings.ReadEngine().ActiveEngineId);
+            var cfg0 = Settings.ReadEngine();   // 协议初值注入（cfg.Protocol 空时按引擎卡默认）
+            var engine = EngineRegistry.Create(cfg0.ActiveEngineId, cfg0);
             var audit = new JsonAuditStore();
             Monitor = new RunMonitor(cam, engine, audit);
             Monitor.Log += m => AppLog.Info(m);
             // 按设置装载引擎参数（Mock 引擎 Load 只清场景；HTTP 引擎装载后走降级回落）
-            Monitor.SwapEngine(engine, Settings.ReadEngine());
+            Monitor.SwapEngine(engine, cfg0);
 
             Main = mainVm;
             Host = new AppHost(mainVm);

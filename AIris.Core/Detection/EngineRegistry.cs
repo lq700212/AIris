@@ -21,9 +21,14 @@ namespace AIris.Core.Detect
             new EngineCard("qwen-vl-http", "Qwen2.5-VL-7B", "许可证：Apache 2.0 · 商用推荐"),
         };
 
-        /// <summary>按 id 建引擎实例（每次新建，调用方负责 Dispose；Mock 单例语义在 MockScene）。</summary>
-        public static IDetectionEngine Create(string engineId)
+        /// <summary>按 id 建引擎实例（每次新建，调用方负责 Dispose；Mock 单例语义在 MockScene）。
+        /// 引擎卡隐含的默认推理协议（custom=自研 /detect 契约；openai=OpenAI 兼容）在此注入
+        /// ——引擎页下拉可覆盖，落 INI 后以 INI 为准。</summary>
+        public static IDetectionEngine Create(string engineId, EngineConfig cfg = null)
         {
+            // 协议初值：仅在 cfg 未带协议（新建/空配置）时按卡默认注入，已配置则尊重配置
+            if (cfg != null && string.IsNullOrEmpty(cfg.Protocol))
+                cfg.Protocol = DefaultProtocol(engineId);
             switch (engineId)
             {
                 case "mock": return new MockDetectionEngine();
@@ -31,6 +36,12 @@ namespace AIris.Core.Detect
                 case "qwen-vl-http": return new HttpDetectionEngine("qwen-vl-http", "Qwen2.5-VL-7B", "许可证：Apache 2.0 · 商用推荐");
                 default: return new MockDetectionEngine();
             }
+        }
+
+        /// <summary>引擎卡默认推理协议（locateanything 走社区 batch 服务自研契约；qwen-vl 走 vLLM 的 OpenAI 兼容口）。</summary>
+        public static string DefaultProtocol(string engineId)
+        {
+            return engineId == "qwen-vl-http" ? "openai" : "custom";
         }
 
         /// <summary>引擎卡定义。</summary>

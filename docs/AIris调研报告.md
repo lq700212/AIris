@@ -247,7 +247,7 @@ NVIDIA 于 **2026 年 5 月 26 日**发布的开放词汇检测 / 视觉定位�
 
 | # | 工作 | 怎么做 | 依赖/前提 |
 |---|---|---|---|
-| 1 | **大模型检测服务端接入** | 部署 Qwen2.5-VL-7B（Apache 2.0 商用合规；5070 Ti 16GB 单卡可跑，batch=1 约 430ms/帧）。生产推理用社区 MIT 版 locateanything-batch（pip 装，`HF_HUB_OFFLINE=1` 离线）。实现 HTTP 服务按 README 契约 `POST /detect`（请求 `{model,prompts,image_b64}` → 响应 `{ok,detections[]}`，0~1000 归一化框）。宿主侧 HttpDetectionEngine 桩已就绪，服务端起即联调 | 无硬依赖，可最先启动 |
+| 1 | **大模型检测服务端接入** | 部署 Qwen2.5-VL-7B（Apache 2.0 商用合规；5070 Ti 16GB 单卡可跑，batch=1 约 430ms/帧）。生产推理用社区 MIT 版 locateanything-batch（pip 装，`HF_HUB_OFFLINE=1` 离线）。实现 HTTP 服务按 README 契约 `POST /detect`（请求 `{model,prompts,image_b64}` → 响应 `{ok,detections[]}`，0~1000 归一化框）。宿主侧 HttpDetectionEngine 桩已就绪，服务端起即联调。**V0.1.7 补注**：协议适配层已沉库 `Kaleidoscope.Infer`（OpenAI 兼容 / Anthropic / Ollama / 自研契约四视觉协议 + JEV Decisions 决策协议）——服务端除自研契约外，直接用 vLLM（OpenAI 兼容口）或 llama-server/Ollama 也能接，引擎页下拉切换即可；JEV 调研结论：云端文本决策模型、无图像输入、闭源无本地权重，与全本地离线红线错位，只留 ISemanticDecisionService 可选口（审计 NG 原因归纳，默认关） | 无硬依赖，可最先启动 |
 | 2 | **POC 检出率实测**（整个技术路线是否成立的决定性一步，对应第八章 POC 阶段） | 搭 POC 环境（5070 Ti 工控机 + transformers 原生推理），取工厂真实工件照片 10 类典型零件（含 M3 小螺丝/相似件/对称件）跑检出率。第七章风险兜底：小零件局部放大二次推理、few-shot 微调、传统模板匹配双通道。**POC 未过不承诺交付** | 第 1 项先就位 + 采购计算主机（第五章 5.1） |
 | 3 | **真机相机接入** | ICameraSource 接口实现切到 Kaleidoscope 库相机适配器（KxHik2DCamera 等，海康 GigE/USB3），相机选型按第五章 5.2（500 万像素 GigE + 高角度环形光 + 漫射罩）。注意 airspace：相机 SDK HWND 显示区与 WPF 分层窗互斥，画面统一走位图帧（当前 Mock 即此口径） | POC 通过后按工位硬件到位 |
 | 4 | **PLC/IO 工位联锁** | Kaleidoscope 库 PlcNetCommQue（HslCommunication，授权文件 HslLicense.dat/hsl.dat 已部署 00_ExeBuild）。对接三色灯/声光报警/引导屏/启停信号；断连重连与心跳走库内既有范式 | 现场电控点表 |

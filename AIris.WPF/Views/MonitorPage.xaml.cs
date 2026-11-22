@@ -79,12 +79,12 @@ namespace AIris.WPF.Views
             canvas.Children.Clear();
             if (_vm == null || _vm.Boxes.Count == 0) return;
 
-            // 画面渲染区：舞台内接 4:3 矩形（Mock 帧固定 1280×960）
+            // 画面渲染区：按帧实际像素宽高求舞台内接矩形（V0.1.7 抽 FrameRect 共用；
+            // 旧硬编码 4:3 只在 Mock 帧 1280×960 时成立，真机换分辨率即错位）
             double gw = StageGrid.ActualWidth, gh = StageGrid.ActualHeight;
             if (gw < 10 || gh < 10) return;
-            double rw = Math.Min(gw, gh * 4.0 / 3.0);
-            double rh = rw * 3.0 / 4.0;
-            double ox = (gw - rw) / 2, oy = (gh - rh) / 2;
+            double rw, rh, ox, oy;
+            FrameRect.TryGet(_vm.FrameImage, gw, gh, out ox, out oy, out rw, out rh);
 
             var brush = (Brush)FindResource("ThemePrimary");
             var labelBrush = (Brush)FindResource("ThemePrimary2");

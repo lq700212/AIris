@@ -61,6 +61,7 @@ namespace AIris.WPF.ViewModels
         {
             ApplyCommand = new RelayCommand(Apply);
             BackCommand = new RelayCommand(() => ServiceHub.Main.Go("monitor"));
+            TestConnectionCommand = new RelayCommand(TestConnection);
         }
 
         public ObservableCollection<EngineCardVm> Cards { get; } = new ObservableCollection<EngineCardVm>();
@@ -85,6 +86,35 @@ namespace AIris.WPF.ViewModels
 
         private int _batchSize = 8;
         public int BatchSize { get { return _batchSize; } set { SetProperty(ref _batchSize, value); } }
+
+        // —— 推理协议（V0.1.7 沉库 Kaleidoscope.Infer：OpenAI 兼容 / Anthropic / Ollama / 自研契约） ——
+
+        /// <summary>协议下拉选项（注解各协议适配的部署形态，选对"信封"）。</summary>
+        public System.Collections.Generic.List<ChoiceItem> ProtocolChoices { get; } = new System.Collections.Generic.List<ChoiceItem>
+        {
+            new ChoiceItem("custom",    "自研 FastAPI 契约（/detect · locateanything-batch 部署形态）"),
+            new ChoiceItem("openai",    "OpenAI 兼容（/v1/chat/completions · vLLM / llama.cpp / LMDeploy）"),
+            new ChoiceItem("ollama",    "Ollama 原生（/api/chat · 本地 Ollama 跑视觉模型）"),
+            new ChoiceItem("anthropic", "Anthropic（/v1/messages · 云端 Claude 视觉）"),
+        };
+
+        private string _protocol = "custom";
+        /// <summary>推理协议 id（INI [Engine] Protocol；决定 InferClient 用哪个 transport 组包）。</summary>
+        public string Protocol
+        {
+            get { return _protocol; }
+            set
+            {
+                if (SetProperty(ref _protocol, value))
+                    OnPropertyChanged(nameof(IsCustomProtocol));   // 解码/批处理仅自研契约（服务端参数）可编辑
+            }
+        }
+
+        /// <summary>解码模式/批处理是否可编辑（属 locateanything-batch 服务端参数；其他协议灰显）。</summary>
+        public bool IsCustomProtocol { get { return _protocol == "custom"; } }
+
+        private string _apiKey = "";
+        public string ApiKey { get { return _apiKey; } set { SetProperty(ref _apiKey, value); } }
 
         private string _httpBaseUrl = "";
         public string HttpBaseUrl { get { return _httpBaseUrl; } set { SetProperty(ref _httpBaseUrl, value); } }
@@ -111,6 +141,7 @@ namespace AIris.WPF.ViewModels
 
         public ICommand ApplyCommand { get; }
         public ICommand BackCommand { get; }
+        public ICommand TestConnectionCommand { get; }
 
         public override void OnEnter() { Load(); }
 
@@ -124,7 +155,9 @@ namespace AIris.WPF.ViewModels
             var cfg = ServiceHub.Settings.ReadEngine();
             HttpBaseUrl = cfg.HttpBaseUrl;
             HttpModel = cfg.HttpModel;
+            ApiKey = cfg.ApiKey;
             BatchSize = cfg.BatchSize;
+            Protocol = string.IsNullOrEmpty(cfg.Protocol) ? EngineRegistry.DefaultProtocol(cfg.ActiveEngineId) : cfg.Protocol;
             _decodeMode = cfg.DecodeMode == "fast" ? "fast（MTP）" : cfg.DecodeMode == "slow" ? "slow（AR）" : "hybrid（MTP 优先）";
             OnPropertyChanged(nameof(DecodeMode));
 
@@ -162,14 +195,51 @@ namespace AIris.WPF.ViewModels
             if (!ServiceHub.Host.ShowEngineSwitch(card.Card)) return;
             var cfg = ServiceHub.Settings.ReadEngine();
             cfg.ActiveEngineId = card.Card.Id;
-            var engine = EngineRegistry.Create(card.Card.Id);
+            if (string.IsNullOrEmpty(cfg.Protocol)) cfg.Protocol = EngineRegistry.DefaultProtocol(card.Card.Id);   // 协议初值
+            var engine = EngineRegistry.Create(card.Card.Id, cfg);
             engine.Load(cfg);
             ServiceHub.Monitor.SwapEngine(engine, cfg);
             ServiceHub.Settings.WriteEngine(cfg);
+            Protocol = cfg.Protocol;            // 新引擎默认协议回填表单（用户未改协议时保持一致）
             RefreshState();
         }
 
-        /// <summary>应用推理参数（落 INI；引擎参数需重载时提示）。</summary>
+        /// <summary>测试连接（用表单当前值——未保存——探活；报结果与耗时）。</summary>
+        private void TestConnection()
+        {
+            var ep = new Kaleidoscope.Infer.InferEndpoint
+            {
+                Protocol = MapProtocol(Protocol),
+                BaseUrl = HttpBaseUrl,
+                Model = HttpModel,
+                ApiKey = ApiKey,
+                TimeoutMs = 3000,
+            };
+            var client = new Kaleidoscope.Infer.InferClient();
+            try
+            {
+                var r = client.ProbeAsync(ep, System.Threading.CancellationToken.None).GetAwaiter().GetResult();
+                if (r.Ok)
+                    ServiceHub.Host.Info("连接成功：" + ep.BaseUrl + "\r\n响应 " + r.LatencyMs + " ms（协议 " + Protocol + "）", "测试连接");
+                else
+                    ServiceHub.Host.Info("连接失败：" + r.Error + "\r\n检查服务地址/协议是否匹配部署形态。", "测试连接");
+            }
+            finally { client.Dispose(); }
+        }
+
+        /// <summary>协议 id → InferProtocol 枚举（与 HttpDetectionEngine.BuildEndpoint 同口径）。</summary>
+        private static Kaleidoscope.Infer.InferProtocol MapProtocol(string id)
+        {
+            switch ((id ?? "").ToLowerInvariant())
+            {
+                case "openai": return Kaleidoscope.Infer.InferProtocol.OpenAi;
+                case "anthropic": return Kaleidoscope.Infer.InferProtocol.Anthropic;
+                case "ollama": return Kaleidoscope.Infer.InferProtocol.Ollama;
+                default: return Kaleidoscope.Infer.InferProtocol.CustomJson;
+            }
+        }
+
+        /// <summary>应用推理参数（落 INI + 实际生效：HTTP 引擎热重载重探活——旧版只落盘不生效）。</summary>
         private void Apply()
         {
             var cfg = ServiceHub.Settings.ReadEngine();
@@ -177,8 +247,23 @@ namespace AIris.WPF.ViewModels
             cfg.BatchSize = BatchSize;
             cfg.HttpBaseUrl = HttpBaseUrl;
             cfg.HttpModel = HttpModel;
+            cfg.Protocol = Protocol;
+            cfg.ApiKey = ApiKey;
             ServiceHub.Settings.WriteEngine(cfg);
-            ServiceHub.Host.Info("推理参数已保存。引擎侧参数在下次引擎加载时生效（HTTP 引擎接入后按此配置连接）。", "已保存");
+
+            // 实际生效：当前引擎是 HTTP 型且协议/地址/Key 变了 → Load 重探活刷新状态（UI 即时可见）
+            var engine = ServiceHub.Monitor.Engine;
+            if (engine is AIris.Core.Detect.HttpDetectionEngine)
+            {
+                engine.Load(cfg);
+                RefreshState();
+                ServiceHub.Host.Info("推理参数已应用：协议 " + Protocol + " · "
+                    + (engine.IsLoaded ? "服务在线（探活通过）" : "服务未连通（检测回落 Mock 演示）"), "已应用");
+            }
+            else
+            {
+                ServiceHub.Host.Info("推理参数已保存。当前引擎（Mock）不使用 HTTP 参数；切换到 HTTP 型引擎时按此配置连接。", "已保存");
+            }
         }
     }
 }

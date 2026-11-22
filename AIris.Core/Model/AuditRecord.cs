@@ -41,5 +41,9 @@ namespace AIris.Core.Model
 
         /// <summary>引擎名（LocateAnything-3B / Qwen2.5-VL-7B / Mock 演示）。</summary>
         public string EngineName { get; set; } = "";
+
+        /// <summary>语义决策备注（V0.1.7 可选增强：NG 原因归纳，如"漏装"；默认空——
+        /// 语义决策服务未启用时不写；旧记录无此字段反序列化为 null，JSON 兼容）。</summary>
+        public string SemanticNote { get; set; } = "";
     }
 }

@@ -3,40 +3,32 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Net.Http.Headers;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using AIris.Core.Model;
-using Newtonsoft.Json;
+using Kaleidoscope.Infer;
 
 namespace AIris.Core.Detect
 {
     /// <summary>
-    /// HTTP 推理引擎（**桩**，大模型接入的唯一填实点——AGENTS.md"大模型现状"）。
+    /// HTTP 推理引擎（V0.1.7 从"桩"升级为 InferClient 薄适配——AGENTS.md"大模型现状"
+    /// 的唯一接入面，接缝位置不变，内部实现换沉库协议层）。
     ///
-    /// 未来形态（调研报告 §4 已定）：Linux 工控机常驻推理服务（locateanything-batch 的
-    /// FastAPI / Qwen2.5-VL 的 vLLM/LMDeploy），本类组 HTTP 请求调用。
+    /// 【干什么】组 InferEndpoint（协议/地址/模型/Key）→ InferClient.DetectAsync
+    /// （OpenAI 兼容 / Anthropic / Ollama / 自研 /detect 四协议统一收口）→ 0~1000
+    /// 归一化框。换部署形态（vLLM↔llama.cpp↔Ollama↔自研 FastAPI）= 改引擎页下拉框，
+    /// 本类与上层零改动。
     ///
-    /// 现在已实现的部分：配置装载、图像编码（JPG base64）、请求组包、响应解析（0~1000 归一化框）、
-    /// 超时/降级（服务不可达 → Ok=false，不抛异常）。**未实现**：服务端还没有——任何调用都会
-    /// 走"服务不可达"降级，UI 显示"引擎未接入，当前 Mock 演示"。
-    ///
-    /// 接入指引（填实者读这里）：与推理服务约定一个 POST /detect 契约即可，请求体：
-    /// { "model": "...", "prompts": ["4 颗 M3 盘头螺丝"], "image_b64": "..." }
-    /// 响应体：
-    /// { "ok": true, "detections": [ {"label":"M3 盘头螺丝","x1":690,"y1":300,"x2":750,"y2":360} ] }
-    /// （坐标 0~1000 归一化；响应不含置信度——语义红线）。改造点在 DetectAsync 内标注 TODO-REAL。
+    /// 【Load 语义】同步探活（≤2s 上限）成功置 IsLoaded=true；失败不抛——UI 显示
+    /// "未接入，检测回落 Mock"（与旧桩口径一致，RunMonitor 降级路径不变）。
+    /// 【语义红线】InferBox 无置信度——全链路判定只走 ROI-IoU 几何规则。
     /// </summary>
     public class HttpDetectionEngine : IDetectionEngine
     {
         private readonly string _id;
         private readonly string _name;
         private readonly string _license;
-        private readonly HttpClient _http;
+        private readonly InferClient _client = new InferClient();
 
         private EngineConfig _cfg;
 
@@ -45,15 +37,13 @@ namespace AIris.Core.Detect
             _id = id;
             _name = name;
             _license = license;
-            // net472 HttpClient：连接池按服务端常驻形态配置
-            _http = new HttpClient();
         }
 
         public string Id { get { return _id; } }
         public string Name { get { return _name; } }
         public string LicenseNote { get { return _license; } }
 
-        /// <summary>加载 = 尝试连通服务；失败只记录不抛（切换引擎确认后 UI 展示降级态）。</summary>
+        /// <summary>是否已加载（探活成功；失败只记录不抛，UI 显示降级态）。</summary>
         public bool IsLoaded { get; private set; }
         public EngineStats Stats { get; } = new EngineStats();
         public event Action<string> Log;
@@ -61,51 +51,67 @@ namespace AIris.Core.Detect
         public void Load(EngineConfig cfg)
         {
             _cfg = cfg;
-            _http.Timeout = TimeSpan.FromMilliseconds(Math.Max(1000, cfg.HttpTimeoutMs));
-            // TODO-REAL(接入点 1)：Load 时可调服务 /health 探活，成功置 IsLoaded=true。
-            // 当前恒 false —— 引擎页显示"未接入"，检测走降级（RunMonitor 自动回落 Mock 演示）。
-            IsLoaded = false;
-            OnLog("[" + _name + "] HTTP 引擎桩已装载：BaseUrl=" + cfg.HttpBaseUrl + "（服务端未接入，IsLoaded=false）");
+            // 同步探活（检测线程/VM 上下文均可等 2s；失败不抛降级）
+            try
+            {
+                var ep = BuildEndpoint(cfg);
+                var probe = _client.ProbeAsync(ep, CancellationToken.None).GetAwaiter().GetResult();
+                IsLoaded = probe.Ok;
+                OnLog("[" + _name + "] " + cfg.Protocol + " 协议探活 " + ep.BaseUrl + " → "
+                    + (probe.Ok ? "在线（" + probe.LatencyMs + "ms）" : "不可达：" + probe.Error));
+            }
+            catch (Exception ex)
+            {
+                IsLoaded = false;
+                OnLog("[" + _name + "] 探活异常：" + ex.Message);
+            }
         }
 
         public async Task<DetectResult> DetectAsync(Bitmap frame, IList<string> prompts, CancellationToken ct)
         {
             var sw = System.Diagnostics.Stopwatch.StartNew();
-            // TODO-REAL(接入点 2)：填实以下段——组包→POST→解析框数组。
-            // 当前直接降级返回（Ok=false），RunMonitor 捕获后回落 Mock 出框，演示不中断。
             try
             {
-                if (string.IsNullOrEmpty(_cfg == null ? null : _cfg.HttpBaseUrl))
+                if (_cfg == null || string.IsNullOrEmpty(_cfg.HttpBaseUrl))
                     return Degraded("未配置推理服务地址", sw);
 
-                var body = new
-                {
-                    model = _cfg.HttpModel,
-                    prompts = prompts,
-                    image_b64 = EncodeJpg(frame)
-                };
-                var json = JsonConvert.SerializeObject(body);
-                using (var content = new StringContent(json, Encoding.UTF8, "application/json"))
-                using (var resp = await _http.PostAsync(_cfg.HttpBaseUrl.TrimEnd('/') + "/detect", content, ct))
-                {
-                    resp.EnsureSuccessStatusCode();
-                    var text = await resp.Content.ReadAsStringAsync();
-                    var r = JsonConvert.DeserializeObject<HttpDetectResponse>(text);
-                    if (r == null || !r.ok) return Degraded(r == null ? "响应为空" : (r.error ?? "服务返回失败"), sw);
-                    var dets = (r.detections ?? new List<HttpDet>()).Select(d => new Detection
-                    {
-                        Label = d.label, X1 = d.x1, Y1 = d.y1, X2 = d.x2, Y2 = d.y2
-                    }).ToList();
-                    sw.Stop();
-                    Stats.TotalCalls++;
-                    Stats.LastElapsedMs = sw.ElapsedMilliseconds;
-                    return new DetectResult { Ok = true, Detections = dets, ElapsedMs = sw.ElapsedMilliseconds };
-                }
+                var ep = BuildEndpoint(_cfg);
+                var r = await _client.DetectAsync(ep, EncodeJpg(frame), prompts, ct).ConfigureAwait(false);
+                if (!r.Ok) return Degraded(r.Error, sw);
+
+                sw.Stop();
+                Stats.TotalCalls++;
+                Stats.LastElapsedMs = sw.ElapsedMilliseconds;
+                var dets = new List<Detection>();
+                foreach (var b in r.Boxes)
+                    dets.Add(new Detection { Label = string.IsNullOrEmpty(b.Label) ? "" : b.Label, X1 = b.X1, Y1 = b.Y1, X2 = b.X2, Y2 = b.Y2 });
+                return new DetectResult { Ok = true, Detections = dets, ElapsedMs = sw.ElapsedMilliseconds };
             }
             catch (Exception ex)
             {
-                return Degraded("服务不可达：" + ex.Message, sw);
+                return Degraded("检测异常：" + ex.Message, sw);
             }
+        }
+
+        /// <summary>EngineConfig → InferEndpoint（协议字符串映射；未知值回退 custom 契约）。</summary>
+        private static InferEndpoint BuildEndpoint(EngineConfig cfg)
+        {
+            InferProtocol p;
+            switch ((cfg.Protocol ?? "").ToLowerInvariant())
+            {
+                case "openai": p = InferProtocol.OpenAi; break;
+                case "anthropic": p = InferProtocol.Anthropic; break;
+                case "ollama": p = InferProtocol.Ollama; break;
+                default: p = InferProtocol.CustomJson; break;
+            }
+            return new InferEndpoint
+            {
+                Protocol = p,
+                BaseUrl = cfg.HttpBaseUrl,
+                Model = cfg.HttpModel,
+                ApiKey = cfg.ApiKey,
+                TimeoutMs = cfg.HttpTimeoutMs,
+            };
         }
 
         /// <summary>降级结果（UI 提示引擎未接入，检测链回落 Mock）。</summary>
@@ -116,21 +122,17 @@ namespace AIris.Core.Detect
             return new DetectResult { Ok = false, Error = why, Detections = new List<Detection>(), ElapsedMs = sw.ElapsedMilliseconds };
         }
 
-        private static string EncodeJpg(Bitmap frame)
+        private static byte[] EncodeJpg(Bitmap frame)
         {
             using (var ms = new MemoryStream())
             {
                 frame.Save(ms, ImageFormat.Jpeg);
-                return Convert.ToBase64String(ms.ToArray());
+                return ms.ToArray();
             }
         }
 
-        public void Dispose() { _http.Dispose(); }
+        public void Dispose() { _client.Dispose(); }
 
         private void OnLog(string msg) { var h = Log; if (h != null) h(msg); }
-
-        // —— HTTP 契约模型（与服务端约定一致；坐标 0~1000 归一化、无置信度） ——
-        private class HttpDetectResponse { public bool ok; public string error; public List<HttpDet> detections; }
-        private class HttpDet { public string label; public int x1; public int y1; public int x2; public int y2; }
     }
 }
