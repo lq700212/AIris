@@ -32,18 +32,42 @@ namespace AIris.WPF.ViewModels
             set { SetProperty(ref _active, value); OnPropertyChanged(nameof(StateText)); OnPropertyChanged(nameof(SwitchText)); OnPropertyChanged(nameof(SwitchEnabled)); }
         }
 
-        public string StateText { get { return _active ? "当前引擎" : (Card.IsMock ? "可随时切回" : "可切换"); } }
-        public string SwitchText { get { return _active ? "使用中" : "切换到此引擎"; } }
+        private bool _fallback;
+        /// <summary>当前引擎未接入（探活失败），实际出框由 Mock 兜底 —— 只有 Mock 卡可能为 true。
+        /// 与 Active 互斥：True 时卡片不再冒充"当前引擎"，而是明示"回落执行中"。</summary>
+        public bool Fallback
+        {
+            get { return _fallback; }
+            set { SetProperty(ref _fallback, value); OnPropertyChanged(nameof(StateText)); OnPropertyChanged(nameof(SwitchText)); }
+        }
+
+        public string StateText
+        {
+            get
+            {
+                if (_active) return "当前引擎";
+                if (_fallback) return "回落执行中";
+                return Card.IsMock ? "可随时切回" : "可切换";
+            }
+        }
+        public string SwitchText
+        {
+            get
+            {
+                if (_active) return "使用中";
+                if (_fallback) return "切回此引擎";
+                return "切换到此引擎";
+            }
+        }
         public bool SwitchEnabled { get { return !_active; } }
 
         public ICommand SwitchCommand { get; }
 
-        /// <summary>外部刷新态。</summary>
-        public void Refresh() { Active = _owner.IsActive(IdOf(Card)); }
-
-        private static string IdOf(EngineRegistry.EngineCard c)
+        /// <summary>外部刷新态：Active=选中；Fallback=选中引擎未接入、实际由 Mock 出框。</summary>
+        public void Refresh()
         {
-            return c.Id;
+            Active = _owner.IsActive(Card.Id);
+            Fallback = _owner.IsFallback(Card.Id);
         }
     }
 
@@ -167,7 +191,6 @@ namespace AIris.WPF.ViewModels
         /// <summary>刷新引擎卡高亮与状态行。</summary>
         public void RefreshState()
         {
-            var activeId = ServiceHub.Monitor.Engine == null ? "mock" : ServiceHub.Monitor.Engine.Id;
             ActiveEngineName = ServiceHub.Monitor.Engine == null ? "Mock 演示引擎" : ServiceHub.Monitor.Engine.Name;
             foreach (var c in Cards) c.Refresh();
             if (ServiceHub.Monitor.Engine != null)
@@ -175,21 +198,37 @@ namespace AIris.WPF.ViewModels
                 EngineState = ServiceHub.Monitor.Engine.IsLoaded
                     ? ServiceHub.Monitor.Engine.Name + " · 已就绪"
                     : ServiceHub.Monitor.Engine.Name + " · 未接入，检测回落 Mock 演示";
-                LastMs = ServiceHub.Monitor.Engine.Stats.LastElapsedMs;
+                // 单帧耗时取"实际执行者"（未接入时是 Mock 替身的耗时）——否则回落态永远显示 0 ms，
+                // 与画面明明在出框的事实矛盾
+                LastMs = string.IsNullOrEmpty(ServiceHub.Monitor.LastExecEngineName)
+                    ? ServiceHub.Monitor.Engine.Stats.LastElapsedMs
+                    : ServiceHub.Monitor.LastExecElapsedMs;
                 TotalCalls = ServiceHub.Monitor.Engine.Stats.TotalCalls;
                 MemoryNote = ServiceHub.Monitor.Engine.Stats.MemoryNote;
             }
         }
 
+        /// <summary>是否选中该引擎（严格按当前引擎实例，不再把"未接入的 HTTP 引擎"也算成 Mock——
+        /// 旧逻辑导致 Mock 卡与真实引擎卡同时亮"当前引擎"，用户以为切换没生效）。</summary>
         public bool IsActive(string engineId)
         {
             var cur = ServiceHub.Monitor.Engine;
-            if (engineId == "mock")
-                return cur == null || cur.Id == "mock" || !cur.IsLoaded;
-            return cur != null && cur.Id == engineId;
+            if (cur == null) return string.Equals(engineId, "mock", StringComparison.OrdinalIgnoreCase);
+            return string.Equals(cur.Id, engineId, StringComparison.OrdinalIgnoreCase);
         }
 
-        /// <summary>切换引擎（Host 二次确认 → SwapEngine → 落 INI → 刷新）。</summary>
+        /// <summary>选中引擎未接入时，实际出框由 Mock 兜底（Mock 卡显示"回落执行中"）。</summary>
+        public bool IsFallback(string engineId)
+        {
+            var cur = ServiceHub.Monitor.Engine;
+            return string.Equals(engineId, "mock", StringComparison.OrdinalIgnoreCase)
+                && cur != null
+                && !string.Equals(cur.Id, "mock", StringComparison.OrdinalIgnoreCase)
+                && !cur.IsLoaded;
+        }
+
+        /// <summary>切换引擎（Host 二次确认 → SwapEngine → 落 INI → 刷新）。
+        /// 装载（探活）统一由 RunMonitor.SwapEngine 执行，这里不重复 Load（否则 HTTP 引擎白等两轮探活）。</summary>
         public void SwitchTo(EngineCardVm card)
         {
             if (!ServiceHub.Host.ShowEngineSwitch(card.Card)) return;
@@ -197,7 +236,6 @@ namespace AIris.WPF.ViewModels
             cfg.ActiveEngineId = card.Card.Id;
             if (string.IsNullOrEmpty(cfg.Protocol)) cfg.Protocol = EngineRegistry.DefaultProtocol(card.Card.Id);   // 协议初值
             var engine = EngineRegistry.Create(card.Card.Id, cfg);
-            engine.Load(cfg);
             ServiceHub.Monitor.SwapEngine(engine, cfg);
             ServiceHub.Settings.WriteEngine(cfg);
             Protocol = cfg.Protocol;            // 新引擎默认协议回填表单（用户未改协议时保持一致）

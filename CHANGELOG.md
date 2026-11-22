@@ -2,6 +2,49 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.8（2026-11-22）引擎切换语义修复：回落可见化 + 状态不再自相矛盾 + 切换生命周期保护
+
+### 一、用户问题：切了引擎 Mock 还在跑、Mock 卡还亮"当前引擎"（真 Bug，非降级设计本身）
+
+- **双"当前引擎"根因**：`EngineViewModel.IsActive` 对 Mock 的判定含 `|| !cur.IsLoaded`——
+  选中 HTTP 引擎但探活失败时，Mock 卡与真实引擎卡同时亮橙边+"当前引擎"胶囊，
+  用户以为切换没生效。改为严格按当前引擎实例判 Active；回落态单独用
+  `Fallback` 属性表达（Mock 卡"回落执行中"，Warn 色胶囊/描边，按钮"切回此引擎"）；
+- **降级不可见根因**：`RunMonitor.DetectLoop` 算了 `engineName = _engine.Name + "→Mock"`
+  却从未使用（死代码），画面信息行仍写"LocateAnything-3B 0 ms"、审计 `EngineName`
+  仍写选中的引擎。改为 `_lastExecName/_lastExecMs` 记录本帧实际执行者：
+  信息行显示 `LocateAnything-3B→Mock 0 ms`，判定日志与审计 `EngineName` 同步写
+  `X→Mock`（追溯链能看出这单是不是演示替身出的框）；引擎页"单帧耗时"取实际执行耗时；
+- **顶栏状态胶囊动态化**：原写死"引擎 在线"，与未接入引擎的事实矛盾；改绑
+  `MainViewModel.EngineIndicator`（引擎 在线 / 引擎 回落 Mock / 引擎 未接入），
+  订阅 `RunMonitor.StateChanged` 刷新（检测线程事件经 Dispatcher 回 UI 线程）；
+- **文案修正**：引擎卡"切换需重载引擎（Mock 演示不中断）"→"（未接入时回落 Mock 演示）"；
+  确认弹窗补充"未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）"。
+
+### 二、切换引擎的生命周期修复
+
+- **重复探活**：`EngineViewModel.SwitchTo` 先 `engine.Load(cfg)`、`SwapEngine` 内又
+  `Load(cfg)`——HTTP 引擎白等两轮同步探活（各 ≤2s）。改为 `SwapEngine` 唯一装载点；
+- **旧引擎 Dispose 竞态**：检测线程可能正卡在旧引擎的 HTTP 推理请求里（最长
+  `HttpTimeoutMs`），原实现直接 `old.Dispose()` 会撞"请求在飞、client 已释放"。
+  新增 `_engineSync + _inUseEngine + _pendingDispose`：切换时若旧引擎在途 → 延迟到
+  检测线程本轮收尾（`ReleaseEngineAfterUse`）释放，不阻塞 UI；无在途则立即释放；
+  `Dispose()` 收口清理 pending，切回同一实例的场景有防御。
+
+### 三、降级日志节流
+
+- HTTP 引擎持续不可达时，原每帧（300ms）记一条"检测降级"把运行日志刷满；
+  `HttpDetectionEngine.Degraded` 加同因 5s 节流（原因变化立即记，同因超 5s 再记一条心跳）。
+
+### 四、验证（构建 + 真机实点 + 截图目检）
+
+- MSBuild 增量构建 0 error；`Tools\click_ui.ps1` 物理点击实点：未接入回落态 →
+  切回 Mock → 再切回 LocateAnything，切换链路全通，卡片/顶栏/页头/服务状态一致，无双高亮；
+- 明暗两套主题截图目检通过（Warn/Primary/Ok 主题键，无写死色值）；
+- 审计 JSONL 实测 `"EngineName":"LocateAnything-3B→Mock"`（切换前记录为
+  `"Mock 演示引擎"`），监控台信息行实测 `LocateAnything-3B→Mock 0 ms`；
+- 日志节流实测：同一降级原因约 5s 一条，启动链/判定链可读。
+
 ## V0.1.7（2026-11-22）ROI 拖拽标画 + 引擎通用协议层（沉库 Infer 五协议）+ JEV 语义决策留口
 
 ### 一、配方编辑器 ROI 标画升级：在实际取像上拖拽标定（用户定版需求）

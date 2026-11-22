@@ -32,6 +32,10 @@ namespace AIris.Core.Detect
 
         private EngineConfig _cfg;
 
+        // 降级日志节流：检测线程每 300ms 一帧，服务持续不可达时同因 5s 内只记一条
+        private string _lastDegradedReason;
+        private DateTime _lastDegradedAt = DateTime.MinValue;
+
         public HttpDetectionEngine(string id, string name, string license)
         {
             _id = id;
@@ -114,11 +118,18 @@ namespace AIris.Core.Detect
             };
         }
 
-        /// <summary>降级结果（UI 提示引擎未接入，检测链回落 Mock）。</summary>
+        /// <summary>降级结果（UI 提示引擎未接入，检测链回落 Mock）。
+        /// 检测节拍 300ms，同一原因持续不可达时每帧记一条会刷爆运行日志——同因 5s 内只记一次。</summary>
         private DetectResult Degraded(string why, System.Diagnostics.Stopwatch sw)
         {
             sw.Stop();
-            OnLog("[" + _name + "] 检测降级：" + why);
+            var now = DateTime.Now;
+            if (why != _lastDegradedReason || (now - _lastDegradedAt).TotalSeconds >= 5)
+            {
+                _lastDegradedReason = why;
+                _lastDegradedAt = now;
+                OnLog("[" + _name + "] 检测降级：" + why);
+            }
             return new DetectResult { Ok = false, Error = why, Detections = new List<Detection>(), ElapsedMs = sw.ElapsedMilliseconds };
         }
 

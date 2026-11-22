@@ -59,6 +59,19 @@ namespace AIris.Core.Engine
         private CameraFrame _latest;            // 最新帧（替换式）
         private volatile bool _stop;
 
+        // —— 引擎实例生命周期（切换保护） ——
+        // 检测线程可能正卡在旧引擎的 HTTP 推理请求里（最长 HttpTimeoutMs）；若切换时直接
+        // Dispose 旧引擎，会撞上 "请求还在飞、client 已被释放" 的竞态。因此：
+        //   _inUseEngine      = 检测线程当前正在调用的实例（无在途调用时为 null）
+        //   _pendingDispose   = 切换时仍在途的旧实例，由检测线程本轮收尾时释放
+        private readonly object _engineSync = new object();
+        private IDetectionEngine _inUseEngine;
+        private IDetectionEngine _pendingDispose;
+
+        // —— 实际执行者（降级可见化：画面信息行/日志/审计要写真实出框者，不能只写"选了谁"） ——
+        private string _lastExecName = "";      // 本帧实际执行引擎（回落时为 "X→Mock"）
+        private long _lastExecMs;               // 本帧实际执行耗时（含回落替身）
+
         // —— 运行态 ——
         private volatile bool _running;
         private Recipe _recipe;
@@ -147,21 +160,83 @@ namespace AIris.Core.Engine
             RaiseLog("[运行] 已暂停（相机保持取流）");
         }
 
-        /// <summary>切换引擎（引擎页确认后调用；旧引擎释放）。</summary>
+        /// <summary>
+        /// 切换引擎（引擎页确认后调用；旧引擎安全释放）。
+        /// 旧引擎可能正被检测线程使用（HTTP 请求在途）：此时延迟到检测线程本轮收尾再 Dispose，
+        /// 不阻塞 UI 线程，也不会出现 "请求还在飞、client 已被释放" 的竞态。
+        /// 这里不调用 next.Load —— 由本方法统一装载（唯一装载点，避免重复探活等 2×2s）。
+        /// </summary>
         public void SwapEngine(IDetectionEngine next, EngineConfig cfg)
         {
-            var old = _engine;
-            _engine = next;
-            if (old != null && !ReferenceEquals(old, next)) { try { old.Dispose(); } catch { } }
+            if (next == null) return;
+
+            IDetectionEngine disposeNow = null;
+            lock (_engineSync)
+            {
+                var old = _engine;
+                _engine = next;
+                _lastExecName = "";     // 信息行立刻退回新引擎名，下一帧检测再写实际执行者
+                _lastExecMs = 0;
+                if (old != null && !ReferenceEquals(old, next))
+                {
+                    if (ReferenceEquals(old, _pendingDispose))
+                    {
+                        // 切回刚被延迟释放的实例：撤销延迟释放（防御性；注册表每次 new 不会命中）
+                        _pendingDispose = null;
+                    }
+                    else if (ReferenceEquals(old, _inUseEngine))
+                    {
+                        // 在途：交给检测线程收尾释放
+                        _pendingDispose = old;
+                    }
+                    else
+                    {
+                        disposeNow = old;   // 没有在途调用：立刻释放
+                    }
+                }
+            }
+            if (disposeNow != null) { try { disposeNow.Dispose(); } catch { } }
+
             next.Log += m => RaiseLog("[引擎] " + m);   // 新实例专属订阅，不与旧实例串线（接口事件只能 +=）
-            _engine.Load(cfg);
+            next.Load(cfg);
             RaiseState("引擎：" + _engine.Name + (_engine.IsLoaded ? "（已就绪）" : "（未接入，检测回落 Mock 演示）"));
             RaiseLog("[引擎] 切换 → " + next.Name + (next.IsLoaded ? "（加载成功）" : "（未接入，检测回落 Mock 演示）"));
+        }
+
+        /// <summary>检测线程收尾：清在途标记；切换遗留的旧引擎此刻已无调用者，安全释放。</summary>
+        private void ReleaseEngineAfterUse(IDetectionEngine used)
+        {
+            IDetectionEngine late = null;
+            lock (_engineSync)
+            {
+                if (ReferenceEquals(_inUseEngine, used)) _inUseEngine = null;
+                // pending 若已重新成为当前引擎（极端切回场景），不能释放
+                if (_pendingDispose != null && !ReferenceEquals(_pendingDispose, _engine))
+                {
+                    late = _pendingDispose;
+                    _pendingDispose = null;
+                }
+            }
+            if (late != null) { try { late.Dispose(); } catch { } }
         }
 
         public IDetectionEngine Engine { get { return _engine; } }
         public WorkstepEngine Steps { get { return _steps; } }
         public Recipe Recipe { get { return _recipe; } }
+
+        /// <summary>最近一帧实际执行引擎（未接入回落时为 "LocateAnything-3B→Mock"；尚未检测为空串）。
+        /// UI 用它显示真实出框者——不能把"配置选了谁"当成"实际跑了谁"。</summary>
+        public string LastExecEngineName { get { return _lastExecName; } }
+
+        /// <summary>最近一帧实际执行耗时（回落时是 Mock 替身的耗时）。</summary>
+        public long LastExecElapsedMs { get { return _lastExecMs; } }
+
+        /// <summary>审计/日志用的执行者标签：优先实际执行者，未检测过退回当前引擎名。</summary>
+        private string ExecEngineLabel()
+        {
+            if (!string.IsNullOrEmpty(_lastExecName)) return _lastExecName;
+            return Engine == null ? "" : Engine.Name;
+        }
 
         // —— 演示控制（运行监控台控制条） ——
 
@@ -278,17 +353,28 @@ namespace AIris.Core.Engine
                     if (step == null) continue;
 
                     // —— 检测：真实引擎；失败/未接入 → 回落 Mock（演示不中断，调研报告"引擎可插拔"） ——
+                    // 取引擎引用 + 标记在途在同一把锁内完成：切换引擎时据此判断能否立刻 Dispose 旧实例。
                     var prompts = step.Expectation == StepExpectation.FinalCheck
                         ? new List<string>(_recipe.Parts)
                         : new List<string> { step.ExpectedPart };
-                    var result = _engine.DetectAsync(frame.Image, prompts, CancellationToken.None)
-                                        .GetAwaiter().GetResult();
+                    IDetectionEngine exec;
+                    lock (_engineSync) { exec = _engine; _inUseEngine = exec; }
+                    DetectResult result;
+                    try
+                    {
+                        result = exec.DetectAsync(frame.Image, prompts, CancellationToken.None)
+                                    .GetAwaiter().GetResult();
+                    }
+                    finally
+                    {
+                        ReleaseEngineAfterUse(exec);    // 本轮收尾：放行"切换时在途"的旧引擎释放
+                    }
                     List<Detection> dets;
-                    string engineName;
                     if (result != null && result.Ok)
                     {
                         dets = result.Detections;
-                        engineName = _engine.Name;
+                        _lastExecName = exec.Name;
+                        _lastExecMs = result.ElapsedMs;
                     }
                     else
                     {
@@ -296,7 +382,9 @@ namespace AIris.Core.Engine
                         var fallback = _mockEngine ?? (_mockEngine = new MockDetectionEngine());
                         var mr = fallback.DetectAsync(frame.Image, prompts, CancellationToken.None).GetAwaiter().GetResult();
                         dets = mr.Detections;
-                        engineName = _engine.Name + "→Mock";
+                        // 实际执行者是回落替身——信息行/审计都要写出来，不能伪装成选中的引擎
+                        _lastExecName = exec.Name + "→Mock";
+                        _lastExecMs = mr.ElapsedMs;
                     }
                     _lastDetections = dets;
 
@@ -334,8 +422,17 @@ namespace AIris.Core.Engine
         private string BuildInfoLine()
         {
             string baseLine = "2592 × 1944 · 8 fps";
-            if (_lastOutcome != null && Engine != null)
-                baseLine += " · " + Engine.Name + " " + Engine.Stats.LastElapsedMs + " ms";
+            if (_lastOutcome == null) return baseLine;
+
+            // 实际执行者优先（回落时显示 "LocateAnything-3B→Mock xx ms"），未检测过退回当前引擎
+            var name = _lastExecName;
+            var ms = _lastExecMs;
+            if (string.IsNullOrEmpty(name))
+            {
+                name = Engine == null ? "" : Engine.Name;
+                ms = Engine == null ? 0 : Engine.Stats.LastElapsedMs;
+            }
+            if (!string.IsNullOrEmpty(name)) baseLine += " · " + name + " " + ms + " ms";
             return baseLine;
         }
 
@@ -413,15 +510,16 @@ namespace AIris.Core.Engine
                 NgReason = e.Pass ? "" : e.Detail,
                 RuleSnapshot = step == null ? "" : WorkstepEngine.RuleSnapshot(step),
                 ShotFile = shotFile,
-                EngineName = Engine == null ? "" : Engine.Name,
+                // 实际执行者（未接入回落时记 "X→Mock"，追溯链能看出这单是不是演示替身出的框）
+                EngineName = ExecEngineLabel(),
                 // 语义决策备注（V0.1.7 JEV 留口）：NG 时可选归纳原因——增强链路，失败静默不阻断
                 SemanticNote = e.Pass ? "" : TrySemanticNote(step, e),
             });
 
-            // 最终判定结论进日志（运行日志面板 + 文件双出口；含引擎与存档号，追溯链入口）
+            // 最终判定结论进日志（运行日志面板 + 文件双出口；含实际执行引擎与存档号，追溯链入口）
             RaiseLog("[判定] 工步 " + e.StepIndex + (step == null ? "" : "·" + step.Name)
                 + " → " + (e.Pass ? "OK" : "NG · " + e.Detail)
-                + " · 引擎 " + (Engine == null ? "—" : Engine.Name)
+                + " · 引擎 " + ExecEngineLabel()
                 + (string.IsNullOrEmpty(shotFile) ? "" : " · 存档 " + shotFile));
 
             RaiseState(e.Pass ? "工步 " + e.StepIndex + " OK" : "工步 " + e.StepIndex + " NG · " + e.Detail);
@@ -477,7 +575,19 @@ namespace AIris.Core.Engine
             _running = false;
             _cam.Stop();
             _cam.Dispose();
-            if (_engine != null) _engine.Dispose();
+
+            // 检测线程已停：此时无在途调用，当前引擎与延迟释放的旧引擎都可以安全 Dispose
+            IDetectionEngine late;
+            IDetectionEngine current;
+            lock (_engineSync)
+            {
+                late = _pendingDispose;
+                _pendingDispose = null;
+                current = _engine;
+            }
+            if (late != null && !ReferenceEquals(late, current)) { try { late.Dispose(); } catch { } }
+            if (current != null) { try { current.Dispose(); } catch { } }
+
             lock (_frameSync) { if (_latest != null) { _latest.Dispose(); _latest = null; } }
             _wake.Dispose();
         }

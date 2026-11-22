@@ -61,6 +61,48 @@ namespace AIris.WPF.ViewModels
         /// <summary>顶栏明暗主题切换。</summary>
         public ICommand ToggleThemeCommand { get; }
 
+        private string _engineIndicator = "引擎 —";
+        /// <summary>顶栏引擎态胶囊文本：在线 / 回落 Mock / 未接入。
+        /// 不能写死"引擎 在线"——切到未接入的引擎后，顶栏会与引擎页状态自相矛盾。</summary>
+        public string EngineIndicator
+        {
+            get { return _engineIndicator; }
+            private set { SetProperty(ref _engineIndicator, value); }
+        }
+
+        /// <summary>
+        /// 运行时装配后挂订阅（ServiceHub.Install 末尾调用一次）：
+        /// 顶栏引擎态随运行/切换刷新。构造器里 ServiceHub.Monitor 尚未装配，故订阅放在这里。
+        /// </summary>
+        public void AttachRuntime()
+        {
+            var monitor = Services.ServiceHub.Monitor;
+            if (monitor == null) return;
+            monitor.StateChanged += (s, e) => RefreshEngineIndicator();
+            RefreshEngineIndicator();
+        }
+
+        /// <summary>按当前引擎实例刷新顶栏胶囊；StateChanged 可能来自检测线程 → 调度回 UI 线程。</summary>
+        private void RefreshEngineIndicator()
+        {
+            var app = System.Windows.Application.Current;
+            if (app == null || app.Dispatcher.CheckAccess())
+            {
+                ApplyEngineIndicator();
+                return;
+            }
+            app.Dispatcher.BeginInvoke(new System.Action(ApplyEngineIndicator));
+        }
+
+        private void ApplyEngineIndicator()
+        {
+            var monitor = Services.ServiceHub.Monitor;
+            var eng = monitor == null ? null : monitor.Engine;
+            EngineIndicator = eng == null ? "引擎 未接入"
+                : eng.IsLoaded ? "引擎 在线"
+                : "引擎 回落 Mock";
+        }
+
         /// <summary>
         /// 触发初始页的进入回调（App 装配 ServiceHub 之后调用一次）：
         /// 构造器里 _currentPage 是字段直赋，不走 OnCurrentPageChanged —— 不补这一下

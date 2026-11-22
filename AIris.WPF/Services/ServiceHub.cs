@@ -74,6 +74,7 @@ namespace AIris.WPF.Services
 
             Main = mainVm;
             Host = new AppHost(mainVm);
+            mainVm.AttachRuntime();   // 顶栏引擎态胶囊订阅（此时 Monitor 已装配；构造器里还拿不到）
         }
 
         /// <summary>最近一条 NG 审计记录（NG 详情弹窗回显截图用；无则 null）。</summary>
@@ -120,7 +121,9 @@ namespace AIris.WPF.Services
 
             public bool ShowEngineSwitch(EngineRegistry.EngineCard card)
             {
-                return Confirm("切换检测引擎", "切换到 " + card.Name + " 将卸载当前引擎并重新加载（Mock 演示不中断）。\r\n许可证：" + card.LicenseNote,
+                return Confirm("切换检测引擎",
+                    "切换到 " + card.Name + " 将卸载当前引擎并重新加载。\r\n许可证：" + card.LicenseNote
+                    + "\r\n未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）。",
                     "确认切换", false);
             }
 

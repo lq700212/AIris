@@ -52,6 +52,10 @@
                                     <Style TargetType="Border">
                                         <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}"/>
                                         <Style.Triggers>
+                                            <!-- 回落执行中（选中引擎未接入，实际由 Mock 兜底）：警示色，且不抢"当前引擎"描边 -->
+                                            <DataTrigger Binding="{Binding Fallback}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource ThemeWarn}"/>
+                                            </DataTrigger>
                                             <DataTrigger Binding="{Binding Active}" Value="True">
                                                 <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
                                             </DataTrigger>
@@ -66,6 +70,9 @@
                                                 <Style TargetType="Border" BasedOn="{StaticResource KxChip}">
                                                     <Setter Property="Background" Value="{DynamicResource ThemePanel2Bg}"/>
                                                     <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding Fallback}" Value="True">
+                                                            <Setter Property="Background" Value="{DynamicResource ThemeWarnDim}"/>
+                                                        </DataTrigger>
                                                         <DataTrigger Binding="{Binding Active}" Value="True">
                                                             <Setter Property="Background" Value="{DynamicResource ThemeOkDim}"/>
                                                         </DataTrigger>
@@ -77,6 +84,9 @@
                                                     <Style TargetType="TextBlock" BasedOn="{StaticResource KxChipText}">
                                                         <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
                                                         <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding Fallback}" Value="True">
+                                                                <Setter Property="Foreground" Value="{DynamicResource ThemeWarn}"/>
+                                                            </DataTrigger>
                                                             <DataTrigger Binding="{Binding Active}" Value="True">
                                                                 <Setter Property="Foreground" Value="{DynamicResource ThemeOk}"/>
                                                             </DataTrigger>
@@ -94,7 +104,7 @@
                                         <Run>开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则</Run>
                                     </TextBlock>
                                     <Grid Margin="0,12,0,0">
-                                        <TextBlock Text="切换需重载引擎（Mock 演示不中断）" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                                        <TextBlock Text="切换需重载引擎（未接入时回落 Mock 演示）" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
                                         <Button Content="{Binding SwitchText}" Command="{Binding SwitchCommand}" IsEnabled="{Binding SwitchEnabled}"
                                                 Style="{DynamicResource FreshPrimaryButton}" FontSize="12" Padding="14,6"
                                                 Cursor="Hand" HorizontalAlignment="Right"
