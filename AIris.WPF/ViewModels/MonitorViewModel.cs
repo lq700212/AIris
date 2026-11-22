@@ -46,6 +46,16 @@ namespace AIris.WPF.ViewModels
             DemoRemoveCommand = new RelayCommand(() => ServiceHub.Monitor.DemoRemove(SelectedPart));
             DemoPlaceAllCommand = new RelayCommand(() => ServiceHub.Monitor.DemoPlaceAll());
             GoRecipeCommand = new RelayCommand(() => ServiceHub.Main.Go("recipe"));
+
+            // 运行日志流：首屏回放环形缓冲 + 订阅新行（检测线程触发 → Dispatcher 收口；
+            // VM 生命周期=App 级，订阅不退订）。条数超限移最旧（与 AppLog 环形同容量）。
+            foreach (var l in AppLog.Snapshot()) Logs.Add(l);
+            AppLog.LineAdded += line =>
+                Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    Logs.Add(line);
+                    while (Logs.Count > 300) Logs.RemoveAt(0);
+                }));
         }
 
         // —— 画面 ——
@@ -110,6 +120,9 @@ namespace AIris.WPF.ViewModels
 
         // —— 工步序列 ——
         public ObservableCollection<StepRowVm> Steps { get; } = new ObservableCollection<StepRowVm>();
+
+        // —— 运行日志流（AppLog 双出口的 UI 面板侧；环形限 300 条防长跑膨胀） ——
+        public ObservableCollection<LogLine> Logs { get; } = new ObservableCollection<LogLine>();
 
         // —— 演示控制（Mock 专用） ——
         /// <summary>演示零件选项（启用配方的 Parts）。</summary>

@@ -69,11 +69,18 @@ graph LR
         MON --> STEP["WorkstepEngine 工步状态机"]
         MON --> AUD["IAuditStore 存档"]
     end
+    subgraph KAL["ThirdParty/Kaleidoscope（git submodule）"]
+        KUI["Kaleidoscope.UI：圆角窗骨架 / 弹窗基类 / Kx 样式族"]
+        KLIB["Kaleidoscope：海康/大恒相机适配器 / SQLite 存储 / PLC 通讯"]
+    end
     UI --> MON
+    UI -.->|"窗壳 / 弹窗 / 样式复用"| KUI
+    CORE -.->|"真机相机 / 存储可切"| KLIB
 ```
 
 - **检测引擎是唯一接入面**：真实模型接入 = 实现 `IDetectionEngine`（或填实 `HttpDetectionEngine` 的服务调用），UI/判定/审计零改动；
-- **相机同理**：真机实现 `ICameraSource`（或包一层 Kaleidoscope 相机适配器），Mock 三件套保留作演示与回归。
+- **相机同理**：真机实现 `ICameraSource`（或包一层 Kaleidoscope 相机适配器），Mock 三件套保留作演示与回归；
+- **壳与控件复用**：主窗圆角骨架（分层真圆角 + 最大化归零）、弹窗基类、Kx 样式族全部来自 submodule `ThirdParty/Kaleidoscope`（Kaleidoscope.UI），AIris 只写页面与主题；Kaleidoscope 主库的相机适配器 / 存储 / 通讯是 Core 层真机接入时的现成选件。
 
 ## 大模型接入（留桩说明）
 

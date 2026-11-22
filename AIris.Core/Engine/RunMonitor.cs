@@ -82,6 +82,7 @@ namespace AIris.Core.Engine
             {
                 _running = false;
                 RaiseState("整检通过 · 全流程完成");
+                RaiseLog("[运行] 整检通过 · 全流程完成（今日 OK " + _okCount + " / NG " + _ngCount + "）");
                 var h = AllDone; if (h != null) h(this, e);
             };
             _engine.Log += m => RaiseLog("[引擎] " + m);
@@ -108,6 +109,9 @@ namespace AIris.Core.Engine
             _ngCount = 0;
             if (recipe == null) MockScene.Instance.Clear();
             RaiseState(recipe == null ? "未启用配方" : "配方就绪：" + recipe.Name + "（" + recipe.StepCount + " 步）");
+            RaiseLog(recipe == null
+                ? "[配方] 未启用配方（停止判定，仅看画面）"
+                : "[配方] 装载启用：" + recipe.Name + " · " + recipe.StepCount + " 步 · " + recipe.Rois.Count + " ROI");
         }
 
         /// <summary>启动运行（相机 + 检测线程）。</summary>
@@ -120,6 +124,7 @@ namespace AIris.Core.Engine
             _detectThread = new Thread(DetectLoop) { IsBackground = true, Name = "AIrisDetect" };
             _detectThread.Start();
             RaiseState("运行中");
+            RaiseLog("[运行] 启动检测（相机已启 + 检测线程拉起）");
         }
 
         /// <summary>暂停运行（停检测线程，相机保持）。</summary>
@@ -127,6 +132,7 @@ namespace AIris.Core.Engine
         {
             _running = false;
             RaiseState("已暂停");
+            RaiseLog("[运行] 已暂停（相机保持取流）");
         }
 
         /// <summary>切换引擎（引擎页确认后调用；旧引擎释放）。</summary>
@@ -138,6 +144,7 @@ namespace AIris.Core.Engine
             next.Log += m => RaiseLog("[引擎] " + m);   // 新实例专属订阅，不与旧实例串线（接口事件只能 +=）
             _engine.Load(cfg);
             RaiseState("引擎：" + _engine.Name + (_engine.IsLoaded ? "（已就绪）" : "（未接入，检测回落 Mock 演示）"));
+            RaiseLog("[引擎] 切换 → " + next.Name + (next.IsLoaded ? "（加载成功）" : "（未接入，检测回落 Mock 演示）"));
         }
 
         public IDetectionEngine Engine { get { return _engine; } }
@@ -310,6 +317,12 @@ namespace AIris.Core.Engine
                 ShotFile = shotFile,
                 EngineName = Engine == null ? "" : Engine.Name
             });
+
+            // 最终判定结论进日志（运行日志面板 + 文件双出口；含引擎与存档号，追溯链入口）
+            RaiseLog("[判定] 工步 " + e.StepIndex + (step == null ? "" : "·" + step.Name)
+                + " → " + (e.Pass ? "OK" : "NG · " + e.Detail)
+                + " · 引擎 " + (Engine == null ? "—" : Engine.Name)
+                + (string.IsNullOrEmpty(shotFile) ? "" : " · 存档 " + shotFile));
 
             RaiseState(e.Pass ? "工步 " + e.StepIndex + " OK" : "工步 " + e.StepIndex + " NG · " + e.Detail);
         }

@@ -2,6 +2,74 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.3（2026-11-22）壳圆角体系 + 运行日志系统 + 顶栏 hover 白垫与胶囊居中
+
+### 窗体圆角（用户反馈：窗口化要圆角、全屏不要）
+
+- **主窗窗口化真圆角落地**：MainWindow 根内容包根 Border（`RootShell`，
+  CornerRadius=16，C 方案 radius 口径与弹窗卡片 `Fn.ShellRadius` 同值）——
+  基类 `ChromeBorderlessWindow` 的分层真圆角三件套（AllowsTransparency + 透明窗底 +
+  根 Border 圆角/Clip 联动）此前因宿主根元素是 Grid 而一直处于"纯壳降级"（圆角失效）；
+  **根因两处**：①根元素非 Border → 基类 `Content as Border` 解析失败；②Window 级
+  `Background="{DynamicResource ThemeWindowBg}"` 本地值覆盖基类 Transparent →
+  四角实底直角；修复=删 Window Background 本地值 + 根 Border 设 ThemeWindowBg 兜底；
+- **最大化归零 / 还原恢复**：基类 StateChanged 联动（ApplyMaximizedCorner +
+  UpdateRootClip）原样生效；XAML 初始 `WindowState="Maximized"` 的 StateChanged
+  早于根 Border 解析、基类联动跳过 → MainWindow code-behind Loaded 补一次归零
+  （时序补偿，窗口化启动不走本支）；
+- **验证**：PrintWindow 四角 alpha + 角部放大目检——窗口化四角圆弧干净、
+  最大化四角直角贴满工作区、再最大化归零复现 ✓；
+
+### 弹窗圆角收边（用户反馈：NG 详情弹窗圆角没处理干净）
+
+- **根因=投影被窗矩形裁出四角脏晕**：屏摄（CopyFromScreen）实测弹窗四角圆弧外
+  一圈灰色阴影月牙——`KxShellDefaults.ShadowMargin=0`（抄 HJVision 口径）时弹窗
+  卡片贴满窗矩形，`Fx.WinShadow`（BlurRadius 24）画在卡片四周的投影被窗裁掉，
+  只剩圆弧外月牙区的残余灰晕，白底主窗上看即"圆角脏边"；
+- **修复=ShadowMargin 0→14（库 CureLine 缺省口径）**：弹窗骨架根 Grid 恢复
+  投影留白，浮层投影完整绘制（四周柔和渐隐），四角弧外纯透明不再有脏晕；
+  全部弹窗（NG 详情/新建配方/确认/存档）同基类自动生效；屏摄复验：NG 详情与
+  新建配方弹窗四角弧线干净 + 投影自然 ✓；
+
+### 顶栏钮 hover 白垫（用户反馈：🌓/最小化/最大化悬停要对齐导航胶囊效果）
+
+- MainWindow.Resources 新增 `AiTopGhostButton` 顶栏幽灵钮样式：hover 白 20%
+  （#33FFFFFF）CornerRadius=7 圆角垫 + 白字（形状同导航胶囊口径），应用于
+  🌓 主题切换、最小化 —、最大化 ▢ 三钮；关闭钮保持库 `KxTitleCloseButton`
+  红底 hover 不动（警示语义）；物理鼠标实点 hover + PrintWindow 放大目检三钮
+  白垫全部生效 ✓；
+
+### README / 文档
+
+- **README 架构图补 ThirdParty/Kaleidoscope 关系**：新增 subgraph
+  `KAL["ThirdParty/Kaleidoscope（git submodule）"]`（Kaleidoscope.UI 窗壳/样式 +
+  Kaleidoscope 相机适配器/存储/PLC 通讯两卡），主窗 UI 虚线指向壳复用、Core 虚线
+  指向真机接入选件；架构说明补"壳与控件复用"条目；语法沿用 id["label"] 引号化
+  红线（V0.1.2 教训），静态核对 12 label 全引号化 ✓；
+- Tools 新增 `shot_corner_check.ps1`（圆角/hover/弹窗四角回归截图脚本，
+  PrintWindow 四角 alpha 检查 + 屏摄角部放大）；
+
+### 日志系统 + 监控台右栏改造（2026-11-22 用户反馈：空白区加日志、状态行收拢、胶囊居中）
+
+- **软件日志系统升级为"文件 + UI 实时流"双出口**：AppLog 新增 LogLine 数据模型 +
+  环形缓冲（300 条）+ LineAdded 事件（任意线程触发，UI 订阅方 Dispatcher 收口）+
+  Snapshot 首屏回放；落盘链路不变（按天滚动日志），库日志出口（LogSinkInjector）
+  自动汇入双出口；
+- **Core 层关键节点补日志**（RunMonitor）：最终判定结论（工步/OK-NG/引擎/存档号）、
+  配方装载、启动/暂停、引擎切换、整检完成——此前只有相机/引擎/异常进日志，
+  判定结论与运行状态不进；
+- **运行监控台右栏底部改"运行日志"面板**：原状态行收拢进面板头部（标题 + 状态省略
+  截断 + OK/NG 计数同行，不再单独占一行），日志 ListBox 占右栏剩余全部空间
+  （右栏 StackPanel→Grid 四行布局），级别着色（WARN 橙/ERROR 红）、新行自动滚到底；
+- **【铁坑】布局重入栈溢出（0xC00000FD 崩进程）**：Logs_CollectionChanged 里同步
+  ScrollIntoView + UpdateLayout 会造成 UpdateLayout 重入递归（布局中又触发布局）——
+  修复=滚动延后一拍 `Dispatcher.BeginInvoke(..., DispatcherPriority.Background)`，
+  踢出布局周期再滚；WPF"CollectionChanged 里滚动 ItemsControl"通用红线；
+- **顶栏状态胶囊文本四向居中**：固定 Height=26 + Padding 10,0 + 文本
+  HorizontalAlignment/VerticalAlignment=Center（原 Padding 10,4 行盒偏移不居中）；
+- 验证：日志面板实时滚动（启动链/MockBridge/引擎切换/配方装载/相机启动/运行启停/
+  NG 判定全链路可见）+ 状态收拢 + 胶囊居中，PrintWindow 截图目检全过 ✓；
+
 ## V0.1.2（2026-11-22）品牌图标定版换全：C 方案「鸢尾绽放」（用户选定）
 
 ### 换全三面（exe 资源 / 运行窗口 / 界面品牌位）+ 快捷方式

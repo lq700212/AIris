@@ -20,6 +20,16 @@ namespace AIris.WPF.Views
             InitializeComponent();
             // 最大化 glyph 跟随 StateChanged（统一覆盖 Click 与"双击顶栏空白"系统通道两种来源）
             StateChanged += (s, e) => MaxGlyph.Text = WindowState == WindowState.Maximized ? "❐" : "▢";
+
+            // 【窗体圆角时序补偿】XAML 里 WindowState="Maximized" 先于根 Border 解析生效，
+            // 基类 ChromeBorderlessWindow 的 StateChanged 联动（最大化圆角归零）此刻
+            // RootShell 还没解析出来被跳过——Loaded 补一次归零；窗口化启动不走本支，
+            // 还原/再最大化走基类 StateChanged 正常联动（见 MainWindow.xaml 头注释）。
+            Loaded += (s, e) =>
+            {
+                if (WindowState == WindowState.Maximized)
+                    RootShell.CornerRadius = new CornerRadius(0);
+            };
         }
 
         // —— 三窗钮（最小化 / 最大化切换 / 关闭）：View 层纯窗口操作，不进 VM ——

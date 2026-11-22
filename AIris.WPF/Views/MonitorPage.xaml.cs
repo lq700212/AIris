@@ -29,9 +29,26 @@ namespace AIris.WPF.Views
                 {
                     // FrameImage 变化也重绘（画面比例基准）
                     _vm.PropertyChanged += (s2, e2) => { if (e2.PropertyName == "FrameImage") RedrawBoxes(); };
+
+                    // 运行日志流：新行自动滚到底（View 行为；VM 日志已 Dispatcher 收口在 UI 线程）
+                    _vm.Logs.CollectionChanged -= Logs_CollectionChanged;
+                    _vm.Logs.CollectionChanged += Logs_CollectionChanged;
                 }
                 RedrawBoxes();
             };
+        }
+
+        /// <summary>日志新行自动滚动到底。必须延后一拍（DispatcherPriority.Background）：
+        /// CollectionChanged 可能在布局周期内同步触发，此时直接 ScrollIntoView 会
+        /// UpdateLayout 重入递归（实测栈溢出 0xC00000FD 崩进程），踢到布局外再滚。</summary>
+        private void Logs_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
+        {
+            if (LogList.Items.Count == 0) return;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                if (LogList.Items.Count == 0) return;
+                LogList.ScrollIntoView(LogList.Items[LogList.Items.Count - 1]);
+            }), System.Windows.Threading.DispatcherPriority.Background);
         }
 
         /// <summary>NG 详情弹窗（告警卡按钮；走 Host 门面不直接 new Window）。</summary>

@@ -23,7 +23,10 @@ namespace AIris.WPF
         protected override void OnStartup(StartupEventArgs e)
         {
             // —— 1. 库壳常量：必须在任何窗创建之前设（对位 HJVision 口径，字号随 C 方案 fs:14） ——
-            Kaleidoscope.UI.Views.KxShellDefaults.ShadowMargin = new Thickness(0);
+            // ShadowMargin=14（库 CureLine 缺省口径，2026-11-22 从 0 改回）：0 时弹窗卡片
+            // 贴满窗矩形，Fx.WinShadow 投影被窗裁得只剩四角圆弧外月牙的灰晕——屏摄实测
+            // 弹窗四角"圆角没处理干净"的脏边即此；14 留白让浮层投影完整绘制，圆角干净。
+            Kaleidoscope.UI.Views.KxShellDefaults.ShadowMargin = new Thickness(14);
             Kaleidoscope.UI.Views.KxShellDefaults.UseContentClip = true;
             Kaleidoscope.UI.Views.KxShellDefaults.ImplicitStyleKeys =
                 "Button=KxDialogButtonImplicit,ComboBox=KxDialogComboImplicit,TextBox=KxDialogTextBoxImplicit," +

@@ -24,7 +24,16 @@
     区域即系统拖动区（原 DragMove 事件随之删除，勿回加）；
   · 顶栏静态胶囊（引擎/相机在线）CornerRadius 同步 99→7 对齐形状口径；
   · 三窗钮复用库 KxTitleMin/Max/CloseButton（hover 内置：关闭红底），glyph 跟随
-    StateChanged 事件（双击顶栏空白走系统最大化通道也同步）。
+    StateChanged 事件（双击顶栏空白走系统最大化通道也同步）；
+  · 【窗体圆角（2026-11-22 用户反馈：窗口化要圆角、全屏不要）】分层真圆角三件套
+    由基类 ChromeBorderlessWindow 提供（AllowsTransparency+透明窗底+根 Border 圆角
+    +Clip 裁溢出），本窗只负责：CornerRadius=16（C 方案 radius 16 口径，与弹窗卡片
+    Fn.ShellRadius 同值）+ 根 Border（RootShell，视觉圆角载体，背景 ThemeWindowBg
+    兜底）——Window 级禁写 Background（基类 Transparent 才能四角透桌面，写本地值
+    =四角实底直角）；最大化归零/还原恢复由基类 StateChanged 联动，XAML 初始
+    WindowState=Maximized 的补偿见 code-behind Loaded；
+  · 🌓/最小化/最大化钮 hover 白 20% 圆角垫（AiTopGhostButton，2026-11-22 用户反馈
+    对齐导航胶囊悬停效果；关闭钮保持库 KxTitleCloseButton 红底 hover 不动）。
 -->
 <views:ChromeBorderlessWindow x:Class="AIris.WPF.Views.MainWindow"
                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -36,10 +45,10 @@
                              WindowStartupLocation="CenterScreen"
                              WindowState="Maximized"
                              CaptionHeight="52"
+                             CornerRadius="16"
                              Title="AI 智瞳"
                              Icon="/Assets/app.ico"
-                             MinWidth="1200" MinHeight="760"
-                             Background="{DynamicResource ThemeWindowBg}">
+                             MinWidth="1200" MinHeight="760">
     <Window.Resources>
         <!-- 页面映射：VM 类型 → 页面 UserControl（导航切换的唯一机制） -->
         <DataTemplate DataType="{x:Type vm:MonitorViewModel}"><v:MonitorPage/></DataTemplate>
@@ -81,13 +90,45 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- 顶栏幽灵钮（🌓/最小化/最大化共用）：hover 白 20% 圆角 7 垫——效果对齐
+             导航胶囊悬停（用户点名）；形状口径同胶囊 CornerRadius 7。宽度由元素逐个
+             设（三窗钮 40=库 SysButtonWidth 口径，🌓 自适应），高度随顶栏 52（垫
+             Margin 4,8 → 32×36 视觉居中）。关闭钮不适用本样式（保持库红底 hover）。 -->
+        <Style x:Key="AiTopGhostButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
+                                Margin="4,8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="#66FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </Window.Resources>
 
-    <Grid>
-        <Grid.RowDefinitions>
-            <RowDefinition Height="52"/>
-            <RowDefinition Height="*"/>
-        </Grid.RowDefinitions>
+    <!-- 根 Border：窗体视觉圆角载体（基类按 Content as Border 解析联动 Clip 与最大化
+         归零；CornerRadius 16 与窗 CornerRadius DP 一致，见头注释）。背景 ThemeWindowBg
+         兜底页面透明区，四角由基类 Clip 裁圆。 -->
+    <Border x:Name="RootShell" CornerRadius="16" Background="{DynamicResource ThemeWindowBg}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="*"/>
+            </Grid.RowDefinitions>
 
         <!-- ===== 顶栏（titlegrad 渐变）：品牌 + 菜单导航 + 状态 + 三窗钮 =====
              CaptionHeight=52 覆盖全顶栏：空白处拖动/双击最大化由 WindowChrome 提供，
@@ -146,25 +187,31 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- 右侧：状态胶囊（形状对齐 7 圆角口径；WindowChrome 拖动区）+ 主题切换 -->
+                <!-- 右侧：状态胶囊（固定高 + 文本四向居中，2026-11-22 用户反馈；WindowChrome 拖动区）
+                     + 主题切换 -->
                 <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <Border CornerRadius="7" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
-                        <TextBlock Text="引擎 在线" FontSize="11" Foreground="White"/>
+                    <Border CornerRadius="7" Background="#33FFFFFF" Height="26" Padding="10,0" Margin="0,0,8,0">
+                        <TextBlock Text="引擎 在线" FontSize="11" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
-                    <Border CornerRadius="7" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
-                        <TextBlock Text="相机 在线" FontSize="11" Foreground="White"/>
+                    <Border CornerRadius="7" Background="#33FFFFFF" Height="26" Padding="10,0" Margin="0,0,8,0">
+                        <TextBlock Text="相机 在线" FontSize="11" Foreground="White"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
                     </Border>
                     <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
-                            FontSize="14" Background="Transparent" BorderThickness="0" Foreground="White"
-                            Cursor="Hand" Margin="4,0,0,0" FocusVisualStyle="{x:Null}" ToolTip="切换深浅主题"
+                            Style="{StaticResource AiTopGhostButton}" FontSize="14"
+                            Margin="4,0,0,0" ToolTip="切换深浅主题"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                 </StackPanel>
 
-                <!-- 三窗钮（库样式：hover 内置，关闭=红底；IsHitTestVisibleInChrome 放行命中区） -->
+                <!-- 三窗钮：最小化/最大化用 AiTopGhostButton（hover 白垫圆角 7，见样式注释）；
+                     关闭钮保持库 KxTitleCloseButton（hover 红底警示内置）；IsHitTestVisibleInChrome
+                     放行命中区 -->
                 <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
-                    <Button Style="{DynamicResource KxTitleMinButton}" Content="—" Click="Min_Click" ToolTip="最小化"
+                    <Button Style="{StaticResource AiTopGhostButton}" Width="40" Content="—" FontSize="13"
+                            Click="Min_Click" ToolTip="最小化"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Style="{DynamicResource KxTitleMaxButton}" x:Name="MaxBtn" Click="Max_Click" ToolTip="最大化 / 还原"
+                    <Button Style="{StaticResource AiTopGhostButton}" Width="40" x:Name="MaxBtn" Click="Max_Click" ToolTip="最大化 / 还原"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <TextBlock x:Name="MaxGlyph" Text="▢" FontSize="11"/>
                     </Button>
@@ -176,5 +223,6 @@
 
         <!-- ===== 内容区：页面切换 ===== -->
         <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,16"/>
-    </Grid>
+        </Grid>
+    </Border>
 </views:ChromeBorderlessWindow>
