@@ -1,0 +1,128 @@
+<!--
+  AIris 主窗（C 方案「熔金流场」壳：顶部渐变标题栏 + 内容区页面切换 + 底部 Dock 胶囊导航）
+
+  ┌──────────────────────────────────────────────────────────────┐
+  │ ◉ AI 智瞳 · AIris Monitor   [引擎在线][相机在线]  配方：xxx  🌙 │ ← 顶栏 52（titlegrad 渐变）
+  ├──────────────────────────────────────────────────────────────┤
+  │                                                              │
+  │   ContentControl（CurrentPage → DataTemplate 映射 6 个页面）  │ ← 内容 *
+  │                                                              │
+  ├──────────────────────────────────────────────────────────────┤
+  │      (◉运行监控)(▤配方中心)(⚙检测引擎)(▦审计追溯)(⚙设备集成)  │ ← dock 64（胶囊导航）
+  └──────────────────────────────────────────────────────────────┘
+  继承 ChromeBorderlessWindow：库提供 WindowChrome 行为 + 最大化修正，视觉全部本窗自绘。
+-->
+<views:ChromeBorderlessWindow x:Class="AIris.WPF.Views.MainWindow"
+                             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                             xmlns:views="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
+                             xmlns:vm="clr-namespace:AIris.WPF.ViewModels"
+                             xmlns:v="clr-namespace:AIris.WPF.Views"
+                             WindowStartupLocation="CenterScreen"
+                             WindowState="Maximized"
+                             Title="AI 智瞳"
+                             MinWidth="1200" MinHeight="760"
+                             Background="{DynamicResource ThemeWindowBg}">
+    <Window.Resources>
+        <!-- 页面映射：VM 类型 → 页面 UserControl（导航切换的唯一机制） -->
+        <DataTemplate DataType="{x:Type vm:MonitorViewModel}"><v:MonitorPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:RecipeListViewModel}"><v:RecipeListPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:RecipeEditorViewModel}"><v:RecipeEditorPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:EngineViewModel}"><v:EnginePage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:AuditViewModel}"><v:AuditPage/></DataTemplate>
+        <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsPage/></DataTemplate>
+    </Window.Resources>
+
+    <Border Background="{DynamicResource ThemeWindowBg}" CornerRadius="10" ClipToBounds="True">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="52"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="64"/>
+            </Grid.RowDefinitions>
+
+            <!-- ===== 顶栏（titlegrad 渐变，对位设计稿 app-bar） ===== -->
+            <Border Grid.Row="0" Background="{DynamicResource ThemeTitleGrad}" MouseLeftButtonDown="TitleBar_MouseLeftButtonDown">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="Auto"/>
+                        <ColumnDefinition Width="*"/>
+                        <ColumnDefinition Width="Auto"/>
+                    </Grid.ColumnDefinitions>
+
+                    <!-- 品牌：logo + 名称 -->
+                    <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,0,0" VerticalAlignment="Center">
+                        <Border Width="26" Height="26" CornerRadius="8" Background="#66FFFFFF" VerticalAlignment="Center">
+                            <TextBlock Text="◉" FontSize="14" Foreground="White" HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="AI 智瞳" FontSize="15" FontWeight="Bold" Foreground="White" Margin="10,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock Text="AIris Monitor" FontSize="11" Foreground="#B3FFFFFF" Margin="8,1,0,0" VerticalAlignment="Center"/>
+                    </StackPanel>
+
+                    <!-- 面包屑：当前页 -->
+                    <TextBlock Grid.Column="1" Text="{Binding CurrentTitle}" FontSize="12" Foreground="#CCFFFFFF"
+                               Margin="18,0,0,0" VerticalAlignment="Center"/>
+
+                    <!-- 右侧：状态胶囊区 + 主题切换（窗口三钮由 ChromeBorderlessWindow 自绘注入标题区，
+                         位置以 WindowChrome CaptionHeight 划定；此处只放业务内容） -->
+                    <StackPanel Grid.Column="3" Orientation="Horizontal" Margin="0,0,150,0" VerticalAlignment="Center">
+                        <Border CornerRadius="99" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
+                            <TextBlock Text="引擎 在线" FontSize="11" Foreground="White"/>
+                        </Border>
+                        <Border CornerRadius="99" Background="#33FFFFFF" Padding="10,4" Margin="0,0,8,0">
+                            <TextBlock Text="相机 在线" FontSize="11" Foreground="White"/>
+                        </Border>
+                        <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
+                                FontSize="14" Background="Transparent" BorderThickness="0" Foreground="White"
+                                Cursor="Hand" Margin="4,0,0,0" ToolTip="切换深浅主题"/>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- ===== 内容区：页面切换 ===== -->
+            <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,8"/>
+
+            <!-- ===== 底部 Dock：胶囊导航（对位设计稿 C 方案 dock） ===== -->
+            <Border Grid.Row="2" Background="Transparent">
+                <ItemsControl ItemsSource="{Binding DockPages}" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Horizontal" IsItemsHost="True"/>
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <Button Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
+                                    CommandParameter="{Binding Id}" Cursor="Hand" Margin="6,0">
+                                <Button.Template>
+                                    <ControlTemplate TargetType="Button">
+                                        <Border x:Name="cap" CornerRadius="99" Padding="20,9" Margin="0"
+                                                Background="{DynamicResource ThemePanelBg}"
+                                                BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1">
+                                            <StackPanel Orientation="Horizontal">
+                                                <TextBlock Text="{Binding Icon}" FontSize="13" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource ThemeTextMuted}"/>
+                                                <TextBlock Text="{Binding Title}" FontSize="12.5" Margin="7,0,0,0" VerticalAlignment="Center"
+                                                           Foreground="{DynamicResource ThemeTextFg}"/>
+                                            </StackPanel>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <DataTrigger Binding="{Binding IsCurrent}" Value="True">
+                                                <Setter TargetName="cap" Property="Background" Value="{DynamicResource ThemeBadgeGrad}"/>
+                                                <Setter TargetName="cap" Property="BorderBrush" Value="Transparent"/>
+                                            </DataTrigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="cap" Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Button.Template>
+                            </Button>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Grid>
+    </Border>
+</views:ChromeBorderlessWindow>

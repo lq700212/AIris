@@ -1,0 +1,24 @@
+<Application x:Class="AIris.WPF.App"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             ShutdownMode="OnExplicitShutdown">
+    <!--
+      资源字典合并顺序（前位=库样式，尾位=宿主主题，后合并者优先生效）：
+      1) ChromeStyles  库圆角窗骨架 keyed 样式（窗标题条/系统钮/投影）
+      2) FreshStyles   库 Fresh 按钮/输入族
+      3) ShellStyles   库 Kx 族控件样式（按钮六档/输入/胶囊/表格）
+      4) DefaultLight  库缺省语义键板（91 契约键；宿主 ThemeLight 同键覆盖 → C 方案换肤）
+      5) ThemeLight    宿主主题（C 方案「熔金流场」Token + 覆盖契约键段，启动链可切 ThemeDark）
+    -->
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/ChromeStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/FreshStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/ShellStyles.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/DefaultLight.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/AIris.WPF;component/Styles/ThemeLight.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+</Application>

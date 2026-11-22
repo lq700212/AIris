@@ -1,0 +1,8 @@
+<Project>
+  <!-- 宿主侧目标框架裁剪：AIris 是 net472 宿主，只需要 Kaleidoscope.UI 的 net472 产物。
+       设置后 submodule 的 Kaleidoscope.UI 只还原/构建 net472，离线机不再需要 net8 targeting pack。
+       外部引用写法不变（仍是普通 ProjectReference）。 -->
+  <PropertyGroup>
+    <KaleidoscopeUITargetFrameworks>net472</KaleidoscopeUITargetFrameworks>
+  </PropertyGroup>
+</Project>

@@ -1,0 +1,6 @@
+[submodule "ThirdParty/Kaleidoscope"]
+	path = ThirdParty/Kaleidoscope
+	url = https://github.com/lq700212/kaleidoscope.git
+
+[submodule "ThirdParty/Kaleidoscope"]
+	branch = main

@@ -1,0 +1,161 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+      AIris 宿主主题 · 浅色（默认）—— C 方案「熔金流场」Token 落地（docs/ui_design_mockups.html variant=c light）。
+      本字典 = 宿主自用 Theme* 键（本段）+ 库契约键段（文件尾部，覆盖 DefaultLight 同键 → Kx* 样式换肤）。
+      红线（AGENTS.md）：契约键段值必须写字面量，禁止 StaticResource 元素转发（net472 BAML 键值错位炸主窗）；
+      ThemeDark.xaml 必须与本文件键集完全一致（同键换值）。
+    -->
+
+    <!-- ===== 宿主基础键（C 方案浅色） ===== -->
+    <SolidColorBrush x:Key="ThemeWindowBg" Color="#FFFDF8F4"/>
+    <SolidColorBrush x:Key="ThemePanelBg" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="ThemePanel2Bg" Color="#FFFFF7F0"/>
+    <SolidColorBrush x:Key="ThemeTextFg" Color="#FF3A3230"/>
+    <SolidColorBrush x:Key="ThemeTextMuted" Color="#FF9A8F86"/>
+    <SolidColorBrush x:Key="ThemeBorder" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="ThemePrimary" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="ThemePrimary2" Color="#FFEC4899"/>
+    <SolidColorBrush x:Key="ThemeAccent" Color="#FFEC4899"/>
+    <SolidColorBrush x:Key="ThemeOk" Color="#FF0B7A55"/>
+    <SolidColorBrush x:Key="ThemeWarn" Color="#FFB45309"/>
+    <SolidColorBrush x:Key="ThemeNg" Color="#FFCF4343"/>
+    <LinearGradientBrush x:Key="ThemeTitleGrad" StartPoint="0,0" EndPoint="1,1">
+        <GradientStop Color="#FFF59E0B" Offset="0"/>
+        <GradientStop Color="#FFEC4899" Offset="1"/>
+    </LinearGradientBrush>
+    <LinearGradientBrush x:Key="ThemeBadgeGrad" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FFF97316" Offset="0"/>
+        <GradientStop Color="#FFEC4899" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="ThemePrimaryDim" Color="#33F97316"/>
+    <SolidColorBrush x:Key="ThemeOkDim" Color="#FFE6F7EF"/>
+    <SolidColorBrush x:Key="ThemeWarnDim" Color="#FFFDF3E2"/>
+    <SolidColorBrush x:Key="ThemeNgDim" Color="#FFFDEEEE"/>
+    <CornerRadius x:Key="ThemeCardRadius">16</CornerRadius>
+    <CornerRadius x:Key="ThemeButtonRadius">99</CornerRadius>
+
+    <!-- ================================================================
+         库契约键段（Kaleidoscope.UI ShellStyles/FreshStyles/Chrome 消费的语义键板）
+         红线：值必须写字面量，禁止 StaticResource 元素转发（net472 BAML 键值错位炸主窗）；
+         键集与 ThemeDark.xaml 完全一致（同键换值）；缺键 = DynamicResource 静默空白。
+         配色 = C 方案「熔金流场」浅色（主 #F97316 → #EC4899，底 #FDF8F4/白面板）。
+         ================================================================ -->
+
+    <!-- 品牌/顶栏 -->
+    <LinearGradientBrush x:Key="Brush.HeaderGrad" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FFF59E0B" Offset="0"/>
+        <GradientStop Color="#FFEC4899" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Brush.TopbarBorder" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="Brush.TopbarFg" Color="#FFFFFFFF"/>
+
+    <!-- 幽灵钮 -->
+    <SolidColorBrush x:Key="Brush.GhostBg" Color="#00FFFFFF"/>
+    <SolidColorBrush x:Key="Brush.GhostBorder" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="Brush.GhostBorderHover" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="Brush.GhostFg" Color="#FF3A3230"/>
+    <SolidColorBrush x:Key="Brush.GhostHoverBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.GhostPressedBg" Color="#FFFFE8D5"/>
+    <SolidColorBrush x:Key="Brush.PrimaryGhostBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.PrimaryGhostBorder" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="Brush.PrimaryGhostFg" Color="#FFEA580C"/>
+
+    <!-- 弹窗面 -->
+    <LinearGradientBrush x:Key="Brush.Fresh.WinBg" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#FFFFFFFF" Offset="0"/>
+        <GradientStop Color="#FFFFF9F5" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Brush.Fresh.Border" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="Brush.Fresh.CardBg" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Fresh.CloseHoverBg" Color="#FFE81123"/>
+
+    <!-- Fresh 按钮/输入族 -->
+    <SolidColorBrush x:Key="Brush.Fresh.ButtonBg" Color="#FFFFF7F0"/>
+    <SolidColorBrush x:Key="Brush.Fresh.ButtonHoverBg" Color="#FFFFE8D5"/>
+    <SolidColorBrush x:Key="Brush.Fresh.ButtonHoverBorder" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="Brush.Fresh.ButtonPressedBg" Color="#FFFFDFC8"/>
+    <SolidColorBrush x:Key="Brush.Fresh.FgStrong" Color="#FF3A3230"/>
+    <SolidColorBrush x:Key="Brush.Fresh.FgMid" Color="#FF9A8F86"/>
+    <SolidColorBrush x:Key="Brush.Fresh.InputBg" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Fresh.Accent" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="Brush.Fresh.AccentBorder" Color="#FFEA580C"/>
+    <SolidColorBrush x:Key="Brush.Fresh.OnAccent" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Fresh.AccentHover" Color="#FFFF9340"/>
+    <SolidColorBrush x:Key="Brush.Fresh.AccentPressed" Color="#FFD95F16"/>
+    <SolidColorBrush x:Key="Brush.Fresh.Danger" Color="#FFCF4343"/>
+    <SolidColorBrush x:Key="Brush.Fresh.DangerBorder" Color="#FFB93B3B"/>
+    <SolidColorBrush x:Key="Brush.Fresh.DangerHover" Color="#FFDA4B4B"/>
+    <SolidColorBrush x:Key="Brush.Fresh.DangerPressed" Color="#FFB93B3B"/>
+    <SolidColorBrush x:Key="Brush.Fresh.Success" Color="#FF0B7A55"/>
+    <SolidColorBrush x:Key="Brush.Fresh.SuccessBorder" Color="#FF0A6E4D"/>
+    <SolidColorBrush x:Key="Brush.Fresh.SuccessHover" Color="#FF0E8C63"/>
+    <SolidColorBrush x:Key="Brush.Fresh.SuccessPressed" Color="#FF0A6E4D"/>
+
+    <!-- Shell 族（Kx 控件） -->
+    <SolidColorBrush x:Key="Brush.Shell.Fg" Color="#FF3A3230"/>
+    <SolidColorBrush x:Key="Brush.Shell.FgDim" Color="#FF9A8F86"/>
+    <SolidColorBrush x:Key="Brush.Shell.PanelBg" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Shell.Panel2Bg" Color="#FFFFF7F0"/>
+    <SolidColorBrush x:Key="Brush.Shell.Border" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="Brush.Shell.InputBorder" Color="#FFF2E2D8"/>
+    <SolidColorBrush x:Key="Brush.Shell.Primary" Color="#FFF97316"/>
+    <LinearGradientBrush x:Key="Brush.Shell.PrimaryGrad" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FFF97316" Offset="0"/>
+        <GradientStop Color="#FFEC4899" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Brush.Shell.PrimaryHover" Color="#FFFF9340"/>
+    <SolidColorBrush x:Key="Brush.Shell.PrimaryRing" Color="#66F97316"/>
+    <SolidColorBrush x:Key="Brush.Shell.RingBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.Shell.OnPrimary" Color="#FFFFFFFF"/>
+    <LinearGradientBrush x:Key="Brush.Shell.OkGrad" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FF0B7A55" Offset="0"/>
+        <GradientStop Color="#FF0E8C63" Offset="1"/>
+    </LinearGradientBrush>
+    <SolidColorBrush x:Key="Brush.Shell.OkGradHover" Color="#FF0E8C63"/>
+    <SolidColorBrush x:Key="Brush.Shell.OkFg" Color="#FF0B7A55"/>
+    <SolidColorBrush x:Key="Brush.Shell.OkRing" Color="#660B7A55"/>
+    <SolidColorBrush x:Key="Brush.Shell.DimOkBg" Color="#FFE6F7EF"/>
+    <SolidColorBrush x:Key="Brush.Shell.DimWarnBg" Color="#FFFDF3E2"/>
+    <SolidColorBrush x:Key="Brush.Shell.DimNgBg" Color="#FFFDEEEE"/>
+    <SolidColorBrush x:Key="Brush.Shell.DimPriBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.Shell.NgFg" Color="#FFCF4343"/>
+    <SolidColorBrush x:Key="Brush.Shell.WarnFg" Color="#FFB45309"/>
+    <SolidColorBrush x:Key="Brush.Shell.StatusWarnFg" Color="#FFB45309"/>
+    <SolidColorBrush x:Key="Brush.Shell.WarnRing" Color="#66B45309"/>
+    <SolidColorBrush x:Key="Brush.Shell.GridHeaderBg" Color="#FFFFF7F0"/>
+    <SolidColorBrush x:Key="Brush.Shell.GridEmptyBg" Color="#FFFFFBF8"/>
+    <SolidColorBrush x:Key="Brush.Shell.GridSelBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.Shell.GridLine" Color="#FFF5EAE0"/>
+    <SolidColorBrush x:Key="Brush.Shell.GridRowAltBg" Color="#FFFFFBF8"/>
+    <SolidColorBrush x:Key="Brush.Shell.RowHoverBg" Color="#FFFFF7F0"/>
+    <SolidColorBrush x:Key="Brush.Shell.RowSelectBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.Shell.MenuHoverBg" Color="#FFFFF3E8"/>
+    <SolidColorBrush x:Key="Brush.Shell.SwitchOffBg" Color="#FFD8CFC6"/>
+    <SolidColorBrush x:Key="Brush.Shell.SysBtnHover" Color="#26F97316"/>
+    <SolidColorBrush x:Key="Brush.Shell.SysBtnDisabled" Color="#669A8F86"/>
+    <SolidColorBrush x:Key="Brush.Shell.HoverBg" Color="#FFFFF3E8"/>
+
+    <!-- 主题切换开关（两板刻意同值） -->
+    <SolidColorBrush x:Key="Brush.Shell.ThemeTrack" Color="#FFE0D6CC"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeTrackOn" Color="#FFF97316"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeTrackBorder" Color="#FFD8CFC6"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeKnob" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeKnobOn" Color="#FFFFFFFF"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeMoonFg" Color="#FF9A8F86"/>
+    <SolidColorBrush x:Key="Brush.Shell.ThemeSunFg" Color="#FFF97316"/>
+
+    <!-- 尺寸/效果 -->
+    <CornerRadius x:Key="Fn.ShellRadius">16</CornerRadius>
+    <CornerRadius x:Key="Fn.ShellRadiusTop">16,16,0,0</CornerRadius>
+    <CornerRadius x:Key="Fn.ShellRadiusBottom">0,0,16,16</CornerRadius>
+    <CornerRadius x:Key="Fn.ShellMenuRadius">12</CornerRadius>
+    <CornerRadius x:Key="Fn.ShellCardRadius">16</CornerRadius>
+    <FontWeight x:Key="Fn.ShellTitleFontWeight">SemiBold</FontWeight>
+    <DropShadowEffect x:Key="Fx.ShellPrimaryGlow" Color="#4DF97316" BlurRadius="6" ShadowDepth="1" Direction="90" Opacity="1"/>
+    <DropShadowEffect x:Key="Fx.ShellPrimaryGlowHover" Color="#4DF97316" BlurRadius="9" ShadowDepth="2" Direction="90" Opacity="1"/>
+    <DropShadowEffect x:Key="Fx.ShellMenuShadow" Color="#2EEC4899" BlurRadius="12" ShadowDepth="4" Opacity="1"/>
+    <DropShadowEffect x:Key="Fx.ShellThemeTrackShadow" Color="#000000" BlurRadius="6" ShadowDepth="1" Direction="270" Opacity="0.35"/>
+    <DropShadowEffect x:Key="Fx.ShellThemeKnobShadow" Color="#000000" BlurRadius="8" ShadowDepth="2" Direction="270" Opacity="0.4"/>
+    <DropShadowEffect x:Key="Fx.ShellCardShadow" Color="#18EC4899" BlurRadius="18" ShadowDepth="2" Direction="270" Opacity="0.14"/>
+</ResourceDictionary>

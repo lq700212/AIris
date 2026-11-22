@@ -1,0 +1,128 @@
+<!--
+  设备与集成（设计稿 data-page="settings" · C 方案）
+
+  ┌ 页头：⚙ 设备与集成            [← 返回监控台] [保存(primary)] ┐
+  ├──────────────┬──────────────────────────────────────────────┤
+  │ 设备列表卡    │ 参数卡（相机 IP:端口/曝光 · 光源亮度+漫射罩     │
+  │ (选中高亮)    │ · 引导屏/声光开关 · MES 地址+启用）             │
+  │              │ 底部：[高级参数…] [采集测试帧]                  │
+  └──────────────┴──────────────────────────────────────────────┘
+-->
+<UserControl x:Class="AIris.WPF.Views.SettingsPage"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="*"/>
+        </Grid.RowDefinitions>
+
+        <!-- 页头 -->
+        <Grid Grid.Row="0" Margin="0,0,0,12">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="⚙ 设备与集成" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
+                <TextBlock Text="相机 / 光源 / 引导屏 / 声光报警 / MES" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="14,1,0,0"/>
+            </StackPanel>
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                <Button Content="← 返回监控台" Command="{Binding BackCommand}" Style="{DynamicResource FreshButton}"
+                        FontSize="12" Padding="14,7" Margin="0,0,8,0" Cursor="Hand"/>
+                <Button Content="保存" Command="{Binding SaveCommand}" Style="{DynamicResource FreshPrimaryButton}"
+                        FontSize="12" Padding="18,7" Cursor="Hand"/>
+            </StackPanel>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="230"/>
+                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="*"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- 左：设备列表 -->
+            <Border Grid.Column="0" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="8,10">
+                <ListBox ItemsSource="{Binding Devices}" SelectedIndex="{Binding SelectedDevice}"
+                         BorderThickness="0" Background="Transparent">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate>
+                            <StackPanel Orientation="Horizontal" Margin="6,4">
+                                <TextBlock Text="{Binding Icon}" FontSize="12" Margin="0,0,8,0" Foreground="{DynamicResource ThemePrimary}"/>
+                                <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{DynamicResource ThemeTextFg}"/>
+                            </StackPanel>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+            </Border>
+
+            <!-- 右：参数卡 -->
+            <StackPanel Grid.Column="2">
+                <Border Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="18,14">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="连接参数" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
+                            <TextBlock Text="{Binding SelectedDeviceName, FallbackValue=GigE 相机}" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Right"/>
+                        </Grid>
+                        <UniformGrid Columns="2" Margin="0,10,0,0">
+                            <StackPanel Margin="0,0,14,8">
+                                <TextBlock Text="相机 IP : 端口" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                                <Grid Margin="0,4">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*"/>
+                                        <ColumnDefinition Width="Auto"/>
+                                    </Grid.ColumnDefinitions>
+                                    <TextBox Text="{Binding CameraIp, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0"/>
+                                    <TextBox Grid.Column="1" Text="{Binding CameraPort, UpdateSourceTrigger=PropertyChanged}" Width="70" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="8,0,0,0"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="曝光（µs）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                                <TextBox Text="{Binding ExposureUs, UpdateSourceTrigger=PropertyChanged, FallbackValue=8000}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="0,4"/>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,14,8">
+                                <TextBlock Text="光源通道 1 · 亮度" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                                <Grid Margin="0,4">
+                                    <Slider Value="{Binding LightBrightness, FallbackValue=72}" Minimum="0" Maximum="100" VerticalAlignment="Center"/>
+                                    <TextBlock Text="{Binding LightBrightness, FallbackValue=72}" HorizontalAlignment="Right" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}" Margin="0,0,0,-14"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Margin="0,0,0,8">
+                                <TextBlock Text="MES 接口地址（HTTP）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                                <TextBox Text="{Binding MesUrl, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="0,4"/>
+                            </StackPanel>
+                        </UniformGrid>
+
+                        <!-- 开关组（≤5 预算：漫射罩/引导屏/声光/MES 共 4 个） -->
+                        <UniformGrid Columns="2" Margin="0,8,0,0">
+                            <Grid Margin="0,0,14,6">
+                                <TextBlock Text="漫射罩常开（防金属反光）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                                <CheckBox IsChecked="{Binding DiffuserOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="引导屏同步工步文案" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                                <CheckBox IsChecked="{Binding GuideScreenOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
+                            </Grid>
+                            <Grid Margin="0,0,14,6">
+                                <TextBlock Text="三色声光报警灯" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                                <CheckBox IsChecked="{Binding BeaconOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
+                            </Grid>
+                            <Grid Margin="0,0,0,6">
+                                <TextBlock Text="MES 判定结果上报" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                                <CheckBox IsChecked="{Binding MesEnabled}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
+                            </Grid>
+                        </UniformGrid>
+                    </StackPanel>
+                </Border>
+
+                <!-- 底部动作 -->
+                <Border Background="{DynamicResource ThemePanel2Bg}" CornerRadius="14" Padding="14,10" Margin="0,12,0,0">
+                    <Grid>
+                        <TextBlock Text="Mock 演示态：参数即配置真机时的目标值，保存即生效" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                            <Button Content="采集测试帧" Command="{Binding TestCameraCommand}" Style="{DynamicResource FreshButton}"
+                                    FontSize="12" Padding="14,6" Cursor="Hand"/>
+                        </StackPanel>
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

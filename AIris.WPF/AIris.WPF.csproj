@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net472</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>AIris.WPF</RootNamespace>
+    <AssemblyName>AIris.WPF</AssemblyName>
+    <!-- 必须真 64 位进程：Kaleidoscope 相机 SDK wrapper（海康/大恒）是 64 位原生 -->
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <!-- 输出目录 = 运行目录（INI/配方/审计都在 exe 目录树下） -->
+    <OutputPath>..\00_ExeBuild\</OutputPath>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Core 纯逻辑层 -->
+    <ProjectReference Include="..\AIris.Core\AIris.Core.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+    <!-- Kaleidoscope 主库：WPF 侧直接用 Kaleidoscope.* 类型（MockBridge/LogHelper/相机），必须直引不能靠 Core 传递 -->
+    <ProjectReference Include="..\ThirdParty\Kaleidoscope\Kaleidoscope\Kaleidoscope.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+    <!-- Kaleidoscope.UI：WPF 控件库（多目标库，MSBuild 按 Directory.Build.props 裁剪后自动选 net472 产物） -->
+    <ProjectReference Include="..\ThirdParty\Kaleidoscope\Kaleidoscope.UI\Kaleidoscope.UI.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>

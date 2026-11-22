@@ -1,0 +1,31 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net472</TargetFramework>
+    <LangVersion>7.3</LangVersion>
+    <Nullable>disable</Nullable>
+    <RootNamespace>AIris.Core</RootNamespace>
+    <!-- 纯逻辑层：禁止任何 UI 依赖（不设 UseWPF/UseWindowsForms） -->
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- net472 框架程序集：HttpClient（HTTP 推理引擎桩用） -->
+    <Reference Include="System.Net.Http" />
+    <!-- System.Drawing：相机帧/截图存档（Kaleidoscope 主库同款依赖） -->
+    <Reference Include="System.Drawing" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Newtonsoft.Json：配方 JSON / 审计 JSONL 序列化（NuGet 还原一次后可离线编译） -->
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Kaleidoscope 主库：相机中性帧/SQLite 底座/MockBridge/LogHelper。
+         ProjectReference 源码同仓一起编译，断点可直进库源码。 -->
+    <ProjectReference Include="..\ThirdParty\Kaleidoscope\Kaleidoscope\Kaleidoscope.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+  </ItemGroup>
+
+</Project>
