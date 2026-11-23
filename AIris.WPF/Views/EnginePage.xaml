@@ -1,7 +1,7 @@
 <!--
   检测引擎页（设计稿 data-page="engine" · C 方案）
 
-  ┌ 页头：检测引擎 · Qwen2.5-VL-7B 已加载        [← 返回监控台] [应用配置] ┐
+  ┌ 页头：🧠 检测引擎 · Qwen2.5-VL-7B 已加载        [← 返回监控台] [应用配置] ┐
   ├──────────────────────────────────────────────────────────────────────┤
   │ 三引擎卡（3 列等分）：Mock / LocateAnything-3B / Qwen2.5-VL-7B          │
   │  · 许可证直接标在卡上（研究许可红胶囊，Apache 绿胶囊）                  │
@@ -30,7 +30,8 @@
         <!-- 页头 -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="检测引擎" Style="{StaticResource AiPageTitle}"/>
+                <!-- 页头图标字符与顶栏导航胶囊同源（🧠），2026-11-23 用户要求：各页页头统一带 Icon -->
+                <TextBlock Text="🧠 检测引擎" Style="{StaticResource AiPageTitle}"/>
                 <TextBlock Text="{Binding EngineState, FallbackValue=—}" Style="{StaticResource AiPageSub}"
                            TextTrimming="CharacterEllipsis" MaxWidth="620"/>
             </StackPanel>

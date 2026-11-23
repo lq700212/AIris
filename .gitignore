@@ -22,3 +22,8 @@ Desktop.ini
 # Kaleidoscope/HslCommunication 商业授权（红线：永不入库）
 HslLicense.dat
 hsl.dat
+
+# 外部工具目录（本地索引/agent 工具产物，不入库）
+.codegraph/
+.zcode/
+agent-harness/

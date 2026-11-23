@@ -1,7 +1,7 @@
 <!--
   审计追溯（设计稿 data-page="audit" · C 方案）
 
-  ┌ 页头：审计追溯 · 每一步判定自动截图存档                  [← 返回监控台] ┐
+  ┌ 页头：▦ 审计追溯 · 每一步判定自动截图存档                  [← 返回监控台] ┐
   ├ 筛选卡：日期(160) / 判定(160) / [查询]          右侧：存档目录说明       ┤
   ├ KPI 行：查询命中 / OK / NG / 追溯能力（4 列）                          ┤
   ├ 明细表卡：时间110 / SN170 / 工步* / 区域110 / 判定280 / 详情60          ┤
@@ -28,7 +28,8 @@
         <!-- 页头 -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="审计追溯" Style="{StaticResource AiPageTitle}"/>
+                <!-- 页头图标字符与顶栏导航胶囊同源（▦），2026-11-23 用户要求：各页页头统一带 Icon -->
+                <TextBlock Text="▦ 审计追溯" Style="{StaticResource AiPageTitle}"/>
                 <TextBlock Text="每一步判定自动截图存档，客诉举证直接调档" Style="{StaticResource AiPageSub}"/>
             </StackPanel>
             <Button Content="← 返回监控台" Command="{Binding BackCommand}"

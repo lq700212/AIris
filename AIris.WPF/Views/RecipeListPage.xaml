@@ -1,7 +1,7 @@
 <!--
   配方中心（设计稿 data-page="recipe" · C 方案）
 
-  ┌ 页头：配方中心 · 启用 1 / 共 3 · 一产品一配方，编辑即生效   [＋ 新建配方] ┐
+  ┌ 页头：▤ 配方中心 · 启用 1 / 共 3 · 一产品一配方，编辑即生效   [＋ 新建配方] ┐
   ├──────────────────────────────────────────────────────────────────────┤
   │ 配方卡网格：repeat(4, minmax(0,1fr))，gap 16                            │
   │  每卡：名称 + 状态胶囊 / 检测类目 / 工步·ROI·编辑于 / [编辑][启用][🗑]   │
@@ -30,7 +30,8 @@
         <!-- 页头 -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="配方中心" Style="{StaticResource AiPageTitle}"/>
+                <!-- 页头图标字符与顶栏导航胶囊同源（▤），2026-11-23 用户要求：各页页头统一带 Icon -->
+                <TextBlock Text="▤ 配方中心" Style="{StaticResource AiPageTitle}"/>
                 <TextBlock Text="{Binding EnabledNote}" Style="{StaticResource AiPageSub}"/>
             </StackPanel>
             <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}"
