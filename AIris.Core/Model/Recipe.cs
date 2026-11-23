@@ -4,9 +4,9 @@ using System.Collections.Generic;
 namespace AIris.Core.Model
 {
     /// <summary>
-    /// 配方 = 一个产品/场景的全部检测定义（对位调研报告 §6"配方中心"，设计稿 data-page="recipe/editor"）。
+    /// 配方 = 一个产品/场景的全部检测定义（对位落地指南 §2.2"配方中心"，设计稿 data-page="recipe/editor"）。
     /// 核心思想：产品差异全部收敛在配方文件里，换产品零代码——零件类目用自然语言描述（引擎即指即检的
-    /// prompt 来源），判定规则全部配置化（几何判定、确定性、可审计，调研报告 §6.2）。
+    /// prompt 来源），判定规则全部配置化（几何判定、确定性、可审计，落地指南 §2.7）。
     ///
     /// 持久化：Data\Recipes\&lt;Name&gt;.json（Newtonsoft 序列化，字段即本类公共属性）。
     /// 示例 JSON：
@@ -63,7 +63,7 @@ namespace AIris.Core.Model
         }
     }
 
-    /// <summary>预期变化语义（调研报告 §6："零件X出现在ROI-A / 零件Y从ROI-B消失"）。</summary>
+    /// <summary>预期变化语义（"零件X出现在ROI-A / 零件Y从ROI-B消失"）。</summary>
     public enum StepExpectation
     {
         /// <summary>出现：零件在 ROI 内检测到预期数量（装配到位）。</summary>
@@ -97,7 +97,7 @@ namespace AIris.Core.Model
     }
 
     /// <summary>
-    /// 工步判定规则（全部确定性几何/计数规则，不依赖模型"理解"位置——调研报告 §6.2 第 2 条）。
+    /// 工步判定规则（全部确定性几何/计数规则，不依赖模型"理解"位置——AGENTS 铁律 12）。
     /// </summary>
     public class StepRule
     {
@@ -110,14 +110,14 @@ namespace AIris.Core.Model
         /// <summary>预期数量（null = 只判有无不校验数量；如螺丝 ×4 = 4）。</summary>
         public int? ExpectedCount { get; set; }
 
-        /// <summary>安全件双通道（开放词汇检测 + 传统模板匹配，两者一致才放行；调研报告 §6.2 第 3 条）。
+        /// <summary>安全件双通道（开放词汇检测 + 传统模板匹配，两者一致才放行；落地指南 §2.7）。
         /// 模板匹配通道尚未接入，此开关现阶段只落配置与审计口径（true 时审计记录标注"双通道"）。</summary>
         public bool DualChannel { get; set; }
     }
 
     /// <summary>
     /// 判定区域矩形。坐标口径统一 0~1000 归一化整数（与 LocateAnything 输出口径一致，
-    /// 调研报告 §2.1："坐标为 0~1000 归一化整数"），换相机分辨率不用改配方。
+    /// 落地指南 §2.1："坐标为 0~1000 归一化整数"），换相机分辨率不用改配方。
     /// </summary>
     public class ROIRect
     {

@@ -95,6 +95,7 @@ namespace AIris.WPF.ViewModels
             SelectStepCommand = new RelayCommand(p => SelectedStep = p as EditorStepRowVm);
             SelectRoiCommand = new RelayCommand(p => SelectedRoi = p as RoiVm);
             TogglePreviewCommand = new RelayCommand(() => PreviewOn = !PreviewOn);
+            FullscreenRoiCommand = new RelayCommand(OpenRoiFullscreen);
             // ROI 集合增删 → "判定区域"下拉选项刷新（RoiChoices 每次 get 重建，集合变时广播即可）
             Rois.CollectionChanged += (s, e) => OnPropertyChanged(nameof(RoiChoices));
         }
@@ -230,6 +231,14 @@ namespace AIris.WPF.ViewModels
         public ICommand SelectStepCommand { get; }
         public ICommand SelectRoiCommand { get; }
         public ICommand TogglePreviewCommand { get; }
+        public ICommand FullscreenRoiCommand { get; }
+
+        /// <summary>全屏标画（V0.1.11）：开独立弹窗放大 ROI 画布（走 Host 门面，VM 不 new Window）。
+        /// 弹窗与页内画布共用同一 VM，拖框/数值修改实时双向同步；Esc 或标题条 × 退出。</summary>
+        public void OpenRoiFullscreen()
+        {
+            if (ServiceHub.Host != null) ServiceHub.Host.ShowRoiFullscreen(this);
+        }
 
         // —— ROI 标画实时预览（V0.1.7：编辑页直接开相机出画面，ROI 在实际取像上拖拽标定） ——
 

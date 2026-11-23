@@ -4,7 +4,7 @@ namespace AIris.Core.Model
 {
     /// <summary>
     /// 审计记录：每个工步判定变化落一条（对位设计稿 data-page="audit"）。
-    /// 质量追溯链刚需（调研报告 §6.2 第 4 条：每步自动截图存档，客诉举证）。
+    /// 质量追溯链刚需（每步自动截图存档，客诉举证）。
     /// 持久化：Data\Audit\audit_yyyyMMdd.jsonl 每天一文件、一行一条；截图 PNG 同目录 Shots\ 下。
     /// </summary>
     public class AuditRecord

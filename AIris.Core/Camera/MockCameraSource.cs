@@ -11,7 +11,7 @@ namespace AIris.Core.Camera
     /// Mock 相机（AGENTS.md"Mock 演示三件套"之二）：按 MockScene 在场零件 GDI+ 合成俯拍画面。
     /// 绘制位置与 MockScene.PartLayout 同源（0~1000 归一化 → 画布坐标），保证"画面上看得见的
     /// 零件 = 引擎出的框"（演示可信度的根基）。
-    /// 8 fps 软节拍（装配秒级人工节拍绰绰有余，调研报告 §5），独立后台线程。
+    /// 8 fps 软节拍（装配秒级人工节拍绰绰有余，落地指南 §2.6），独立后台线程。
     /// </summary>
     public class MockCameraSource : ICameraSource
     {

@@ -8,9 +8,9 @@
 > 全本地离线部署。装配防错是**首个落地场景**，但产品定位是通用视觉检测平台（安全监控、
 > 缺料提醒、SOP 合规等场景复用同一套引擎）。Slogan：「一句话，教会 AI 盯现场」。
 >
-> **唯一事实来源**：业务/技术决策看 `docs/AIris调研报告.md`（模型选型/许可证/硬件/架构九章节）；
-> UI 视觉与交互看 `docs/ui_design_mockups.html` 的 **C 方案「熔金流场」**（橙粉渐变/胶囊按钮/
-> 大圆角/底部 Dock 导航/浅色默认）——写界面时对照设计稿，观感对位不是参数对位。
+> **唯一事实来源**：业务/技术决策看 `docs/AIris落地指南.md`（模型接入四协议/许可证/性能预算/
+> 未完成开发清单）；UI 视觉与交互看 `docs/ui_design_mockups.html` 的 **C 方案「熔金流场」单方案版**
+> （橙粉渐变/胶囊按钮/大圆角/顶栏导航胶囊/浅色默认）——写界面时对照设计稿，观感对位不是参数对位。
 >
 > **大模型现状（重要）**：检测引擎（LocateAnything-3B / Qwen2.5-VL-7B）**尚未接入**，
 > `AIris.Core\Detection\IDetectionEngine` 是唯一接入面——真实接入=实现新引擎类或填实
@@ -107,7 +107,7 @@
    改了要记得还原，不进 git。
 5. **不主动 commit/push**，除非用户明确要求；提交前 `git status` + `git diff` 确认范围。
 6. **代码注释要详细**：关键方法写清"做什么 + 为什么 + 怎么改"；XAML 窗体文件头注释带
-   ASCII 布局图；Core 业务类头注释写清与设计稿页面/调研报告章节的对应关系。
+   ASCII 布局图；Core 业务类头注释写清与设计稿页面/落地指南章节的对应关系。
 7. **任务归类按"动了什么"不按"主业是什么"**：新建/改造任何界面即界面任务，先对照
    设计稿 C 方案逐项对位，交付时截图目检汇报；Core 任务附带改界面同样触发。
 8. **改动默认改干净改彻底**：删旧逻辑不留新旧兼容分支/回落/灰度开关，旧键、旧调用点、
@@ -129,9 +129,9 @@
     （绑 ComboBoxItem 集合 = SelectedItem 永远对不上显示空）；ListViewItem 自定义模板必须用
     **GridViewRowPresenter**（Columns 绑 `GridView.ColumnCollection` 附加属性）按列渲染单元格——
     误用 ContentPresenter 只显示 Content.ToString() 整行变类名（2026-11-22 AuditPage 实踩）。
-12. **检测判定语义红线**：检测框**永不显示置信度**（模型无置信度输出，调研报告 §7）；
+12. **检测判定语义红线**：检测框**永不显示置信度**（模型无置信度输出，落地指南 §2.7）；
     位置判定只走 ROI-IoU 几何规则 + 连续 N 帧稳定，几何判定是确定性的、可审计的；
-    判定口径改动必须同步调研报告与审计存档字段。
+    判定口径改动必须同步落地指南与审计存档字段。
 13. **WindowChrome 命中红线**：无边框窗（ChromeBorderlessWindow/ChromeDialogWindow）的
     WindowChrome.CaptionHeight 区域内，未设 `shell:WindowChrome.IsHitTestVisibleInChrome=True`
     的交互元素点击一律被吞成拖窗——"按钮看起来正常却全无响应"的头号根因（2026-11-22 实测：
@@ -146,10 +146,12 @@
 | --- | --- |
 | 新弹窗创建（ChromeDialogWindow 骨架/标题条/隐式样式） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md` + `Views\LicenseDialog.xaml`（最简样板） |
 | **新建控件/样式前查库内现成件**（场景→控件对照表 + 自绘三条件 + 检索命令） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md`「**控件复用索引（按场景查）**」节——开工先查，禁止重复造轮子 |
+| **ROI 标画交互 / 画布比例口径 / 全屏标画弹窗**（序号 10.1 自绘钮登记见下） | `Views\RoiStageController.cs`（三态拖拽 + 按帧比例内接舞台 + 订阅联动）+ `Views\RoiFullscreenDialog.xaml`（最大化弹窗 + 同源 VM） |
+| 自绘控件登记（待评审是否沉库 Kaleidoscope.UI） | `RecipeEditorPage.xaml` 资源 `RoiExpandButton`：纯图标方形"全屏标画"钮（四角扩展箭头 Path，30×30，圆角 9，hover 转 ThemePrimary）——库内 Kx*/Fresh* 按钮族六档均为「文字」或「图标+文字」胶囊，无纯图标方形按钮，故自绘；已满足 Theme* 键 + FocusVisualStyle=Null |
 | 主题键新增（两套字典同键换值 + 契约键段字面值红线） | `Styles/ThemeLight.xaml` + `ThemeDark.xaml` 尾部注释 |
 | 检测引擎接入（真实模型/HTTP 服务） | `AIris.Core\Detection\IDetectionEngine.cs` 文件头（接口契约 + HttpDetectionEngine 填实指引） |
 | 相机接入（海康/大恒真机） | `AIris.Core\Camera\ICameraSource.cs` 文件头 + Kaleidoscope `Cameras/` 适配器 |
-| 工步/判定规则语义 | `AIris.Core\Engine\WorkstepEngine.cs` + `AIris.Core\Judge\JudgeEngine.cs` 头注释（对应调研报告 §6.2） |
+| 工步/判定规则语义 | `AIris.Core\Engine\WorkstepEngine.cs` + `AIris.Core\Judge\JudgeEngine.cs` 头注释（对应落地指南 §2.7） |
 | 配方 JSON 结构 | `AIris.Core\Model\Recipe.cs` 头注释（含完整示例 JSON） |
 | Mock 全流程演示脚本 | 本文「Mock 演示三件套」节 |
 | submodule 提交顺序/库纪律 | `ThirdParty\Kaleidoscope\AGENTS.md` |
@@ -163,7 +165,7 @@
 ```
 
 - 成功标准：`00_ExeBuild\AIris.WPF.exe` 生成且 0 error；启动主窗标题「AI 智瞳」出现。
-- **冒烟**：启动 exe → 主窗出现 → 底部 Dock 切 6 页 → 关闭。
+- **冒烟**：启动 exe → 主窗出现 → 顶栏导航胶囊切 6 页 → 关闭。
 - **全流程演示验收**：新建配方（向导两步）→ 启用 → 运行监控台启动检测 → 演示控制
   推进工步 → NG 模拟 → 告警与重检 → 审计页可查记录与截图存档。
 - **Core 探针**：`powershell -File Tools\probe_ng_semantic.ps1`（NG 语义回归，改动 JudgeEngine

@@ -29,6 +29,9 @@ namespace AIris.WPF.Services
         /// <summary>存档详情弹窗（审计页"⋯"）。</summary>
         void ShowShot(AIris.Core.Model.AuditRecord record);
 
+        /// <summary>ROI 标画全屏弹窗（配方编辑器画布"全屏标画"图标钮）。</summary>
+        void ShowRoiFullscreen(RecipeEditorViewModel vm);
+
         /// <summary>信息提示（替代 MessageBox 直调，统一弹窗壳）。</summary>
         void Info(string text, string caption = "AI 智瞳");
     }
@@ -130,6 +133,15 @@ namespace AIris.WPF.Services
             public void ShowShot(AIris.Core.Model.AuditRecord record)
             {
                 var dlg = new Views.ShotDialog(record);
+                dlg.Owner = Owner();
+                dlg.ShowDialog();
+            }
+
+            /// <summary>ROI 全屏标画窗（模态：编辑完关窗回编辑器；同一 VM 保证双向同步）。</summary>
+            public void ShowRoiFullscreen(RecipeEditorViewModel vm)
+            {
+                if (vm == null) return;
+                var dlg = new Views.RoiFullscreenDialog(vm);
                 dlg.Owner = Owner();
                 dlg.ShowDialog();
             }

@@ -1,0 +1,107 @@
+<!--
+  ROI 全屏标画弹窗（V0.1.11 · 配方编辑器「全屏标画」图标钮）
+
+  ┌ 标题条：◈ ROI 标画 · 全屏 · 配方名                 [─] [▢] [×] ┐
+  ├──────────────────────────────────────────────────────────────┤
+  │ 实际取像 · 与监控画面同比例   拖框/拖角/空白画框提示  [启动取像] │
+  │ ┌──────────────────────────────────────────────────────────┐ │
+  │ │ KxImageStage（按画面比例内接、随窗口缩放）                 │ │
+  │ │   ROI 框 / 四角手柄 / Id 标签（与编辑器同一套交互）         │ │
+  │ └──────────────────────────────────────────────────────────┘ │
+  │ 选中：ROI-x · 名称          X / Y / 宽W / 高H        [退出全屏] │
+  └──────────────────────────────────────────────────────────────┘
+
+  设计口径：
+  - 单独弹窗、默认最大化到工作区（不盖任务栏），保留标题条/系统钮/Esc 退出，
+    工控现场"不知道怎么退出"的风险为零；
+  - 舞台与页内画布共用 RoiStageController——拖拽、数值联动、增删 ROI 全部同源；
+  - 画布比例跟随 FrameImage 实际像素（无帧回退 Mock 4:3），与运行监控台一致。
+-->
+<ui:ChromeDialogWindow x:Class="AIris.WPF.Views.RoiFullscreenDialog"
+                       xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                       xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                       xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
+                       Title="ROI 标画 · 全屏" Subtitle="{Binding RecipeName}" TitleIconChar="◈"
+                       Width="1400" Height="900" WindowStartupLocation="CenterScreen" WindowState="Maximized"
+                       Resizeable="True" ShowMaxButton="True" FixMaximizedToWorkArea="True">
+    <Border Background="{DynamicResource Brush.Fresh.CardBg}" Padding="16,10,16,14">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto"/>
+                <RowDefinition Height="*"/>
+                <RowDefinition Height="Auto"/>
+            </Grid.RowDefinitions>
+
+            <!-- 顶部信息行 -->
+            <Grid Grid.Row="0" Margin="2,0,2,10">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="实际取像" FontSize="14" FontWeight="Bold"
+                               Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
+                    <!-- 状态胶囊（库 KxChip，圆角矩形档；颜色走主题 Dim 键） -->
+                    <Border Style="{StaticResource KxChip}" Background="{DynamicResource ThemePrimaryDim}" Margin="10,0,0,0">
+                        <TextBlock Style="{StaticResource KxChipText}" FontSize="10.5" Text="与监控画面同比例"
+                                   Foreground="{DynamicResource ThemePrimary}"/>
+                    </Border>
+                    <TextBlock Text="{Binding SelectedStep.Name, FallbackValue='—'}" FontSize="12"
+                               Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,0,0,0"/>
+                </StackPanel>
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <TextBlock Text="拖框移动 · 拖角缩放 · 空白拖画新框 · Esc 退出" FontSize="11"
+                               Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="0,0,12,0"/>
+                    <Button Content="{Binding PreviewToggleText}" Command="{Binding TogglePreviewCommand}"
+                            Style="{DynamicResource FreshPrimaryButton}" FontSize="11.5" Padding="14,5" Cursor="Hand"/>
+                </StackPanel>
+            </Grid>
+
+            <!-- 画布视口：舞台按画面比例内接其中（控制器计算尺寸并居中） -->
+            <Border Grid.Row="1" x:Name="StageViewport" Background="{DynamicResource ThemePanel2Bg}"
+                    CornerRadius="14" ClipToBounds="True">
+                <ui:KxImageStage x:Name="FullStage" GridStep="64" Background="Transparent"
+                                 Width="1200" Height="900"
+                                 HorizontalAlignment="Center" VerticalAlignment="Center"
+                                 FrameSource="{Binding FrameImage}"
+                                 IdleText="点「启动取像」出画面，然后在画面上拖拽标画 ROI…"/>
+            </Border>
+
+            <!-- 底部：选中信息 + 数值编辑 + 退出 -->
+            <Grid Grid.Row="2" Margin="2,10,2,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto"/>
+                    <ColumnDefinition Width="*"/>
+                    <ColumnDefinition Width="Auto"/>
+                </Grid.ColumnDefinitions>
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Bottom">
+                    <TextBlock Text="选中：" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding SelectedRoi.Display, FallbackValue='—'}" FontSize="11.5"
+                               Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
+                    <TextBlock Text="（0~1000 归一化，改动即时同步编辑器）" FontSize="10.5"
+                               Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="10,0,0,0"/>
+                </StackPanel>
+                <UniformGrid Grid.Column="1" Columns="4" HorizontalAlignment="Right" MaxWidth="500" Margin="16,0,16,0">
+                    <StackPanel Margin="0,0,10,0">
+                        <TextBlock Text="X" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                        <TextBox Text="{Binding SelectedRoi.X, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
+                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,0">
+                        <TextBlock Text="Y" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                        <TextBox Text="{Binding SelectedRoi.Y, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
+                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                    </StackPanel>
+                    <StackPanel Margin="0,0,10,0">
+                        <TextBlock Text="宽 W" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                        <TextBox Text="{Binding SelectedRoi.W, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
+                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                    </StackPanel>
+                    <StackPanel>
+                        <TextBlock Text="高 H" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
+                        <TextBox Text="{Binding SelectedRoi.H, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
+                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                    </StackPanel>
+                </UniformGrid>
+                <Button Grid.Column="2" Content="退出全屏" Click="Close_Click"
+                        Style="{DynamicResource FreshButton}" FontSize="11.5" Padding="16,6" Cursor="Hand"/>
+            </Grid>
+        </Grid>
+    </Border>
+</ui:ChromeDialogWindow>

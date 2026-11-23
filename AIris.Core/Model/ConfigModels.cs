@@ -57,7 +57,7 @@ namespace AIris.Core.Model
 
         // —— 光源 ——
         public int LightBrightness { get; set; } = 72;
-        public bool LightDiffuserOn { get; set; } = true;   // 漫射罩常开（调研报告 §5.2：高角度环形光+漫射罩防金属反光）
+        public bool LightDiffuserOn { get; set; } = true;   // 漫射罩常开（落地指南 §2.7：高角度环形光+漫射罩防金属反光）
 
         // —— 引导屏 / 声光 ——
         public bool GuideScreenOn { get; set; } = true;     // 引导屏同步工步文案

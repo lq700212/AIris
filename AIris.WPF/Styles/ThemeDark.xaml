@@ -27,6 +27,7 @@
         <GradientStop Color="#FFEC4899" Offset="1"/>
     </LinearGradientBrush>
     <SolidColorBrush x:Key="ThemePrimaryDim" Color="#33F97316"/>
+    <SolidColorBrush x:Key="ThemePrimaryFill" Color="#22F97316"/>
     <SolidColorBrush x:Key="ThemeOkDim" Color="#3310B981"/>
     <SolidColorBrush x:Key="ThemeWarnDim" Color="#33F59E0B"/>
     <SolidColorBrush x:Key="ThemeNgDim" Color="#33EF4444"/>

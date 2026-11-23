@@ -7,7 +7,7 @@
 ![.NET Framework](https://img.shields.io/badge/.NET%20Framework-4.7.2-5C2D91?logo=dotnet)
 ![UI](https://img.shields.io/badge/UI-WPF%20·%20MVVM-blue)
 ![检测引擎](https://img.shields.io/badge/检测引擎-可插拔·四协议接入-f97316)
-![版本](https://img.shields.io/badge/版本-V0.1.9-ec4899)
+![版本](https://img.shields.io/badge/版本-V0.1.11-ec4899)
 
 相机盯着工位，用**自然语言 + 配方**告诉 AI 检测什么、怎么判定，输出工步引导与 OK/NG 防错判定，
 全部本地离线部署。装配防错是首个落地场景，同一套引擎适配安全监控、缺料提醒、SOP 合规等广泛场景。
@@ -101,7 +101,7 @@ graph LR
 
 - 检测请求统一走 grounding prompt（三句式定格式），回包解析为 **0~1000 归一化框**（JSON `bbox_2d` 或 `<box>` 标签两种形态自动兼容），**无置信度字段**——全链路判定只走 ROI-IoU 几何规则；
 - 协议细节与改造点见 [`AIris.Core/Detection/HttpDetectionEngine.cs`](AIris.Core/Detection/HttpDetectionEngine.cs) 与沉库的 `ThirdParty/Kaleidoscope/Kaleidoscope/Infer/`；
-- 模型选型 / 许可证风险 / 硬件三档见 [调研报告](docs/AIris调研报告.md)。
+- 模型选型 / 许可证风险 / 性能预算见 [落地指南](docs/AIris落地指南.md)。
 
 ## 目录树
 
@@ -110,7 +110,7 @@ AIris/
 ├── AIris.Core/            # 纯逻辑层：模型 / 检测引擎 / 相机 / 判定 / 工步 / 存储
 ├── AIris.WPF/             # WPF 主工程（MVVM：Views/ViewModels/Services/Styles）
 ├── ThirdParty/Kaleidoscope/  # git submodule：自研通讯库 + WPF 控件库 + 推理协议层（UI 复用）
-├── docs/                  # 调研报告 + UI 设计稿（C 方案落地蓝本）+ 取像舞台方案 + images/
+├── docs/                  # 落地指南 + UI 设计稿（C 方案单方案版）+ images/
 ├── Tools/                 # 回归探针 + 截图/实点脚本 + 目检素材
 └── 00_ExeBuild/           # 编译输出兼运行目录（配方/审计/INI 现场数据，不入库）
 ```
@@ -119,9 +119,8 @@ AIris/
 
 | 文档 | 说明 |
 | --- | --- |
-| [AIris 调研报告](docs/AIris调研报告.md) | 模型选型 / 许可证风险 / 推理框架 / 硬件三档 / 通用化架构（九章节 + 开发进度） |
-| [UI 设计稿](docs/ui_design_mockups.html) | 5 方案 × 明暗主题可交互工作台（本仓库落地的是 C 方案「熔金流场」） |
-| [KxImageStage 取像舞台控件方案](docs/KxImageStage取像舞台控件方案.md) | 沉库控件的设计 / 键板契约 / 性能护栏实测 |
+| [AIris 落地指南](docs/AIris落地指南.md) | 模型接入（四协议 / 探活 / 验收清单）/ 许可证 / 性能预算 / 未完成开发工作清单 |
+| [UI 设计稿](docs/ui_design_mockups.html) | C 方案「熔金流场」单方案可交互稿（7 页 × 明暗主题，含 vNext 重设计标记） |
 | [AGENTS.md](AGENTS.md) | AI 助手工程指南（铁律 / Mock 三件套 / 构建与验证命令） |
 
 ## 配置

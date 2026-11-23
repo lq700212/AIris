@@ -1,6 +1,7 @@
 ﻿# AIris UI 目检截图（PrintWindow，不受窗口遮挡/前台影响；UTF-8 BOM + CRLF）
-# 用法：powershell -File Tools\shot_ui.ps1 monitor,engine,audit,settings
-# 原理：启动 exe → FindWindow("AI 智瞳") → 依次点击 dock 胶囊切页 → PrintWindow(PW_RENDERFULLCONTENT) 落 PNG 到 Tools\Shots\
+# 用法：powershell -File Tools\shot_ui.ps1 monitor,recipe,engine,audit,settings,editor
+# 原理：启动 exe → FindWindow("AI 智瞳") → 依次点击顶栏导航胶囊切页（editor 先切配方中心再点「编辑」）
+#       → PrintWindow(PW_RENDERFULLCONTENT) 落 PNG 到 Tools\Shots\
 param([string]$pages = "monitor,recipe,engine,audit,settings")
 
 $ErrorActionPreference = 'Stop'
@@ -29,15 +30,31 @@ if ($h -eq [IntPtr]::Zero) { Start-Sleep -Seconds 3; $h = (Get-Process -Id $p.Id
 if ($h -eq [IntPtr]::Zero) { Stop-Process -Id $p.Id -Force; throw '未找到 AI 智瞳主窗' }
 $null = [Cap]::SetForegroundWindow($h)
 Start-Sleep -Milliseconds 800
+$wr = New-Object Cap+RECT
+$null = [Cap]::GetWindowRect($h, [ref]$wr)
+Write-Output ("window L=" + $wr.L + " T=" + $wr.T)
 
-# dock 胶囊中心坐标（1920x1080 全屏最大化口径）：运行监控 700 / 配方中心 837 / 检测引擎 970 / 审计追溯 1100 / 设备集成 1234，y=1008
-$navMap = @{ monitor = 255; recipe = 360; engine = 467; audit = 583; settings = 700 }
+# 顶栏导航胶囊中心（窗口内坐标，1920x1080 最大化口径；y=21 为顶栏中线），实际点击时加窗口原点偏移
+$navMap = @{ monitor = 222; recipe = 352; engine = 481; audit = 619; settings = 749 }
+$navY = 21
+
+# 配方中心 →「编辑」按钮（窗口内坐标），editor 页专用入口
+$editBtn = @{ x = 66; y = 224 }
 
 function Shot([string]$page) {
-  if ($navMap.ContainsKey($page)) {
-    [Cap]::Click([int]$navMap[$page], 1008)
+  if ($page -eq 'editor') {
+    # 编辑器没有顶栏胶囊入口：先切配方中心，再点第一张卡片的「编辑」
+    [Cap]::Click([int]($wr.L + $navMap['recipe']), [int]($wr.T + $navY))
     Start-Sleep -Seconds 2
-    [Cap]::Click([int]$navMap[$page], 1008)   # 双保险：第一次点击可能被焦点变化吃掉
+    [Cap]::Click([int]($wr.L + $navMap['recipe']), [int]($wr.T + $navY))
+    Start-Sleep -Seconds 2
+    [Cap]::Click([int]($wr.L + $editBtn.x), [int]($wr.T + $editBtn.y))
+    Start-Sleep -Seconds 3
+  }
+  elseif ($navMap.ContainsKey($page)) {
+    [Cap]::Click([int]($wr.L + $navMap[$page]), [int]($wr.T + $navY))
+    Start-Sleep -Seconds 2
+    [Cap]::Click([int]($wr.L + $navMap[$page]), [int]($wr.T + $navY))   # 双保险：第一次点击可能被焦点变化吃掉
     Start-Sleep -Seconds 2
   }
   $r = New-Object Cap+RECT

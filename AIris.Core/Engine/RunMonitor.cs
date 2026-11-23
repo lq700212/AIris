@@ -38,7 +38,7 @@ namespace AIris.Core.Engine
     }
 
     /// <summary>
-    /// 运行编排（调研报告 §6 架构的"采集层+检测服务+规则判定+工步引擎"粘合层，AIris Core 唯一运行态）：
+    /// 运行编排（落地指南 §一 架构总览的"采集层+检测服务+规则判定+工步引擎"粘合层，AIris Core 唯一运行态）：
     ///  相机线程: FrameArrived → 换 latestFrame + 唤醒
     ///  检测线程: 取 latestFrame → DetectAsync(prompts) → 失败降级（HTTP 引擎未接入回落 Mock 出框）
     ///           → JudgeEngine 判定 → WorkstepEngine.Feed（稳定帧累计）→ 最终结论落审计 + 截图
@@ -352,7 +352,7 @@ namespace AIris.Core.Engine
                     var step = _steps.CurrentStep;
                     if (step == null) continue;
 
-                    // —— 检测：真实引擎；失败/未接入 → 回落 Mock（演示不中断，调研报告"引擎可插拔"） ——
+                    // —— 检测：真实引擎；失败/未接入 → 回落 Mock（演示不中断，落地指南 §2.2"引擎可插拔"） ——
                     // 取引擎引用 + 标记在途在同一把锁内完成：切换引擎时据此判断能否立刻 Dispose 旧实例。
                     var prompts = step.Expectation == StepExpectation.FinalCheck
                         ? new List<string>(_recipe.Parts)
@@ -483,7 +483,7 @@ namespace AIris.Core.Engine
 
             if (e.Pass) _okCount++; else _ngCount++;
 
-            // —— 截图存档：判定瞬间的画面（质量追溯链，调研报告 §6.2 第 4 条） ——
+            // —— 截图存档：判定瞬间的画面（质量追溯链，客诉举证） ——
             // _liveFrame 是本步判定用的活帧（Feed 是同步回调，此刻尚未 Dispose）
             string shotFile = "";
             try

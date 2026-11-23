@@ -30,9 +30,9 @@ namespace AIris.Core.Engine
     }
 
     /// <summary>
-    /// 工步状态机（调研报告 §6 架构"工步引擎"层）：
+    /// 工步状态机（落地指南 §一 架构总览"工步引擎"层）：
     /// 持配方 → 指向当前步 → RunMonitor 每帧喂 JudgeOutcome → 连续 StableFrames 帧一致才落结论
-    /// （抗手部遮挡抖动，调研报告 §6.2 第 1 条）→ OK 推进下一步 / NG 挂起等人工重检。
+    /// （抗手部遮挡抖动，AGENTS 铁律 12）→ OK 推进下一步 / NG 挂起等人工重检。
     /// 线程模型：仅 RunMonitor 的检测线程调用 Feed*（单线程串行），事件在调用线程抛出（UI 侧自行调度）。
     /// </summary>
     public class WorkstepEngine

@@ -18,6 +18,47 @@
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
         <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" xmlns:converters="clr-namespace:AIris.WPF.Converters"/>
+
+        <!-- ROI 画布"全屏标画"图标钮（V0.1.11）：
+             方形小钮 + 四角扩展箭头，与胶囊按钮并排展示"放大画布"语义（比横向双向箭头更直观）。
+             全部走 Theme* 主题键（禁写死色值）；FocusVisualStyle=Null（清 WPF 默认焦点虚线框）；
+             键盘/读屏语义靠 ToolTip + AutomationProperties.Name。 -->
+        <Style x:Key="RoiExpandButton" TargetType="Button">
+            <Setter Property="Width" Value="30"/>
+            <Setter Property="Height" Value="30"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+            <Setter Property="Background" Value="{DynamicResource ThemePanel2Bg}"/>
+            <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chrome" CornerRadius="9"
+                                Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="1">
+                            <Path x:Name="Glyph" Width="14" Height="14" Stretch="Uniform"
+                                  HorizontalAlignment="Center" VerticalAlignment="Center"
+                                  Data="M4,9 V6 A2,2 0 0 1 6,4 H9  M15,4 H18 A2,2 0 0 1 20,6 V9  M20,15 V18 A2,2 0 0 1 18,20 H15  M9,20 H6 A2,2 0 0 1 4,18 V15"
+                                  Stroke="{TemplateBinding Foreground}" StrokeThickness="1.7"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
+                                <Setter TargetName="Chrome" Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
+                                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource ThemePrimary}"/>
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
+                                <Setter TargetName="Glyph" Property="Stroke" Value="{DynamicResource ThemePrimary}"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
@@ -118,8 +159,12 @@
                 </Border>
             </StackPanel>
 
-            <!-- ===== 右列：工步配置 + 判定规则 + ROI 数值 ===== -->
-            <StackPanel Grid.Column="2">
+            <!-- ===== 右列：工步配置 + 判定规则 + ROI 数值 =====
+                 2026-11-23：外层套 ScrollViewer——ROI 画布改为按画面比例内接（最大 380 高），
+                 小屏/高缩放时整列可滚动，不再把下方数值行挤出窗口。 -->
+            <ScrollViewer Grid.Column="2" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
+                          HorizontalContentAlignment="Stretch" Padding="0,0,4,0">
+            <StackPanel>
                 <!-- 工步配置卡 -->
                 <Border Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="18,14" Visibility="{Binding HasSelection, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
@@ -207,15 +252,25 @@
                                 <TextBlock Text="ROI 标画（在实际取像上拖拽标定）" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
                                 <TextBlock Text="拖框移动 · 拖角缩放 · 空白拖画新框" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,1,0,0"/>
                             </StackPanel>
-                            <Button Content="{Binding PreviewToggleText}" Command="{Binding TogglePreviewCommand}"
-                                    Style="{DynamicResource FreshPrimaryButton}" FontSize="11.5" Padding="14,5"
-                                    HorizontalAlignment="Right" Cursor="Hand"/>
+                            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                                <!-- 全屏标画：单独弹窗放大画布（ROI 仍双向联动，Esc 退出） -->
+                                <Button Style="{StaticResource RoiExpandButton}" Margin="0,0,8,0"
+                                        Command="{Binding FullscreenRoiCommand}"
+                                        ToolTip="全屏标画（单独弹窗，Esc 退出）"
+                                        AutomationProperties.Name="全屏标画"/>
+                                <Button Content="{Binding PreviewToggleText}" Command="{Binding TogglePreviewCommand}"
+                                        Style="{DynamicResource FreshPrimaryButton}" FontSize="11.5" Padding="14,5"
+                                        Cursor="Hand"/>
+                            </StackPanel>
                         </Grid>
-                        <Border Background="{DynamicResource ThemePanel2Bg}" CornerRadius="12" Height="240" Margin="0,10,0,0" ClipToBounds="True">
+                        <!-- 画布视口：舞台（KxImageStage）按画面比例内接其中并居中（RoiStageController 计算尺寸），
+                             视口放不下自动等比缩小、富余自动放大——与主界面监控画面同比例，ROI 不再随超宽条变形。 -->
+                        <Border x:Name="RoiViewport" Background="{DynamicResource ThemePanel2Bg}" CornerRadius="12"
+                                Height="380" Margin="0,10,0,0" ClipToBounds="True">
                             <ui:KxImageStage x:Name="RoiStage" xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
-                                             GridStep="64" SizeChanged="RoiStage_SizeChanged"
-                                             MouseMove="RoiStage_MouseMove" MouseLeftButtonUp="RoiStage_MouseUp"
-                                             Background="Transparent"
+                                             GridStep="64" Background="Transparent"
+                                             Width="480" Height="360"
+                                             HorizontalAlignment="Center" VerticalAlignment="Center"
                                              FrameSource="{Binding FrameImage}" IdleText="点「启动取像」出画面，然后在画面上拖拽标画 ROI…"/>
                         </Border>
                         <Grid Margin="0,10,0,0">
@@ -249,6 +304,7 @@
                     </StackPanel>
                 </Border>
             </StackPanel>
+            </ScrollViewer>
         </Grid>
     </Grid>
 </UserControl>

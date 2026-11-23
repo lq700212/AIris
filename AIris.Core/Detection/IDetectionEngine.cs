@@ -8,7 +8,7 @@ using System.Threading.Tasks;
 namespace AIris.Core.Detect
 {
     /// <summary>
-    /// 单个检测框：开放词汇检测的输出（对位调研报告 §2.1——模型输出 0~1000 归一化坐标框，
+    /// 单个检测框：开放词汇检测的输出（对位落地指南 §2.1——模型输出 0~1000 归一化坐标框，
     /// 文本形式 &lt;box&gt; x1,y1,x2,y2 &lt;/box&gt;）。AIris 全链路统一用这个归一化口径。
     /// ⚠️ 语义红线（AGENTS.md 铁律 11）：模型无置信度输出，本结构不携带分数字段；
     /// 位置判定只走 ROI-IoU 几何规则。
@@ -50,7 +50,7 @@ namespace AIris.Core.Detect
     /// <summary>
     /// 检测引擎唯一接入面（AGENTS.md"大模型现状"红线：真实接入=实现本接口，禁止绕过）。
     ///
-    /// 接入形态对位调研报告 §4：
+    /// 接入形态对位落地指南 §2.2：
     ///  - LocateAnything-3B / Qwen2.5-VL-7B 都是"Linux 常驻推理服务（FastAPI/vLLM）+ HTTP 调用"
     ///    部署形态 → 真实引擎 = 填实 HttpDetectionEngine 的 DetectAsync（组 JSON POST，
     ///    发图像 + prompts，回 0~1000 归一化框数组）。本接口签名即未来真实形态。
