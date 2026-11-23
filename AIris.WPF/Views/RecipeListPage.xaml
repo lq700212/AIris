@@ -1,104 +1,161 @@
 <!--
   配方中心（设计稿 data-page="recipe" · C 方案）
 
-  ┌ 页头：▤ 配方中心 · 启用 1/共N            [新建配方(primary)] ┐
-  │ 配方卡流（WrapPanel，每卡：名称+状态胶囊/类目行/元行/操作钮）  │
-  │ 启用中的卡 = 主色描边焦点卡；空态 = 引导新建                  │
-  └──────────────────────────────────────────────────────────────┘
+  ┌ 页头：配方中心 · 启用 1 / 共 3 · 一产品一配方，编辑即生效   [＋ 新建配方] ┐
+  ├──────────────────────────────────────────────────────────────────────┤
+  │ 配方卡网格：repeat(4, minmax(0,1fr))，gap 16                            │
+  │  每卡：名称 + 状态胶囊 / 检测类目 / 工步·ROI·编辑于 / [编辑][启用][🗑]   │
+  │  启用中卡 = 主色描边；空态 = 虚线引导卡                                  │
+  ├──────────────────────────────────────────────────────────────────────┤
+  │ 底部说明卡：配方文件路径 + 启用唯一性口径                                │
+  └──────────────────────────────────────────────────────────────────────┘
+  旧版固定 430px WrapPanel 在 1920 下右侧留大片空白（vNext 整改点之一），
+  本版改 4 列自适应网格（UniformGrid 等分，与设计稿 grid repeat(4,1fr) 同构）。
 -->
 <UserControl x:Class="AIris.WPF.Views.RecipeListPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:converters="clr-namespace:AIris.WPF.Converters">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
-        <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVis" xmlns:converters="clr-namespace:AIris.WPF.Converters"/>
+        <converters:InverseBoolToVisibilityConverter x:Key="InvBoolToVis"/>
     </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
             <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
         </Grid.RowDefinitions>
 
         <!-- 页头 -->
         <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="▤ 配方中心" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
-                <Border Style="{DynamicResource KxChip}" Background="{DynamicResource ThemePanel2Bg}" Margin="14,0,0,0" VerticalAlignment="Center">
-                    <TextBlock Text="{Binding EnabledNote}" Style="{DynamicResource KxChipText}"/>
-                </Border>
+                <TextBlock Text="配方中心" Style="{StaticResource AiPageTitle}"/>
+                <TextBlock Text="{Binding EnabledNote}" Style="{StaticResource AiPageSub}"/>
             </StackPanel>
-            <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}" Style="{DynamicResource FreshPrimaryButton}"
-                    FontSize="13" Padding="18,8" Cursor="Hand" HorizontalAlignment="Right"/>
+            <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}"
+                    Style="{StaticResource AiBtnPrimary}" HorizontalAlignment="Right"/>
         </Grid>
 
-        <!-- 配方卡流 -->
-        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto">
-            <ItemsControl ItemsSource="{Binding Cards}">
+        <!-- 配方卡网格（4 列等分，自适应容器宽度） -->
+        <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto"
+                      HorizontalScrollBarVisibility="Disabled" Padding="0,0,4,0">
+            <ItemsControl ItemsSource="{Binding Cards}" VerticalAlignment="Top">
                 <ItemsControl.ItemsPanel>
                     <ItemsPanelTemplate>
-                        <WrapPanel Orientation="Horizontal" ItemWidth="430"/>
+                        <!-- 4 列等分（设计稿 grid repeat(4,1fr)）；VerticalAlignment=Top 让行高跟内容，
+                             不随 ScrollViewer 视口拉满（否则单张卡会撑到页面底部） -->
+                        <UniformGrid Columns="4"/>
                     </ItemsPanelTemplate>
                 </ItemsControl.ItemsPanel>
+                <ItemsControl.ItemContainerStyle>
+                    <Style TargetType="ContentPresenter">
+                        <Setter Property="Margin" Value="0,0,16,16"/>
+                    </Style>
+                </ItemsControl.ItemContainerStyle>
                 <ItemsControl.ItemTemplate>
                     <DataTemplate>
-                        <Border Margin="0,0,14,14" CornerRadius="16" Padding="16"
-                                Background="{DynamicResource ThemePanelBg}" BorderThickness="1">
-                            <Border.Style>
-                                <Style TargetType="Border">
-                                    <Setter Property="BorderBrush" Value="{DynamicResource ThemeBorder}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Enabled}" Value="True">
-                                            <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <StackPanel>
-                                <!-- 卡头：名称 + 状态胶囊 -->
-                                <Grid>
-                                    <TextBlock Text="{Binding Name}" FontSize="14.5" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                                    <Border HorizontalAlignment="Right" Style="{DynamicResource KxChip}" Tag="Ok" Padding="9,3" Background="{DynamicResource ThemeOkDim}"
-                                            Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}">
-                                        <TextBlock Text="启用中" FontSize="10.5" FontWeight="Bold" Foreground="{DynamicResource ThemeOk}"/>
-                                    </Border>
-                                    <Border HorizontalAlignment="Right" Style="{DynamicResource KxChip}" Padding="9,3" Background="{DynamicResource ThemePanel2Bg}"
-                                            Visibility="{Binding Enabled, Converter={StaticResource InvBoolToVis}}">
-                                        <TextBlock Text="已停用" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                    </Border>
-                                </Grid>
+                        <Grid>
+                            <!-- ===== 普通配方卡 ===== -->
+                            <Border x:Name="CardRoot" Padding="16">
+                                <Border.Style>
+                                    <Style TargetType="Border" BasedOn="{StaticResource AiCard}">
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding Enabled}" Value="True">
+                                                <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Border.Style>
+                                <StackPanel>
+                                    <!-- 卡头：名称 + 状态胶囊 -->
+                                    <Grid>
+                                        <TextBlock Text="{Binding Name}" FontSize="14.5" FontWeight="Bold"
+                                                   Foreground="{DynamicResource ThemeTextFg}"
+                                                   TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
+                                        <ContentControl HorizontalAlignment="Right" Style="{StaticResource AiChipOk}"
+                                                        Content="启用中" Visibility="{Binding Enabled, Converter={StaticResource BoolToVis}}"/>
+                                        <ContentControl HorizontalAlignment="Right" Style="{StaticResource AiChipMut}"
+                                                        Content="未启用" Visibility="{Binding Enabled, Converter={StaticResource InvBoolToVis}}"/>
+                                    </Grid>
 
-                                <!-- 类目行（自然语言描述 = 配方核心资产） -->
-                                <TextBlock Text="{Binding PartsLine}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"
-                                           Margin="0,8,0,0" TextWrapping="Wrap"/>
-                                <!-- 元行 -->
-                                <TextBlock Text="{Binding MetaLine}" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
+                                    <!-- 类目行（自然语言描述 = 配方核心资产） -->
+                                    <TextBlock Text="{Binding PartsLine}" FontSize="11"
+                                               Foreground="{DynamicResource ThemeTextMuted}"
+                                               Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="17"
+                                               MaxHeight="51"/>
+                                    <!-- 元行 -->
+                                    <TextBlock Text="{Binding MetaLine}" FontSize="10.5"
+                                               Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
 
-                                <!-- 卡脚操作 -->
-                                <StackPanel Orientation="Horizontal" Margin="0,12,0,0">
-                                    <Button Content="编辑" Command="{Binding EditCommand}" Style="{DynamicResource FreshPrimaryButton}"
-                                            FontSize="12" Padding="14,6" Cursor="Hand"/>
-                                    <Button Content="{Binding ToggleText}" Command="{Binding ToggleCommand}" Style="{DynamicResource FreshButton}"
-                                            FontSize="12" Padding="14,6" Margin="8,0,0,0" Cursor="Hand"/>
-                                    <Button Content="🗑" Command="{Binding DeleteCommand}" Style="{DynamicResource FreshDangerButton}"
-                                            FontSize="12" Padding="10,6" Margin="8,0,0,0" Cursor="Hand" ToolTip="删除配方（二次确认）"/>
+                                    <!-- 卡脚操作（设计稿：编辑主色 sm / 启停次色 sm / 删除弱红方形） -->
+                                    <StackPanel Orientation="Horizontal" Margin="0,14,0,0">
+                                        <Button Content="编辑" Command="{Binding EditCommand}"
+                                                Style="{StaticResource AiBtnPrimarySm}"/>
+                                        <Button Content="{Binding ToggleText}" Command="{Binding ToggleCommand}"
+                                                Style="{StaticResource AiBtnSecondarySm}" Margin="8,0,0,0"/>
+                                        <Button Content="🗑" Command="{Binding DeleteCommand}"
+                                                Style="{StaticResource AiBtnDangerSoftSm}" Width="34" Padding="0"
+                                                Margin="8,0,0,0" ToolTip="删除配方（二次确认）"/>
+                                    </StackPanel>
                                 </StackPanel>
-                            </StackPanel>
-                        </Border>
+                            </Border>
+
+                            <!-- ===== 虚线引导卡（网格空位哨兵，设计稿「还没有更多配方」） ===== -->
+                            <Grid x:Name="AddTile" Visibility="Collapsed" MinHeight="150">
+                                <Rectangle RadiusX="16" RadiusY="16" StrokeThickness="1.5"
+                                           StrokeDashArray="4 3" Fill="Transparent"
+                                           Stroke="{DynamicResource ThemeBorder}"/>
+                                <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
+                                    <!-- Segoe MDL2 剪贴板图标（E77F）：矢量字体随 Foreground 上色，
+                                         深色主题下也清晰可见（emoji 在深色下渲染成黑剪影，2026-11-23 目检实踩） -->
+                                    <TextBlock Text="&#xE77F;" FontFamily="Segoe MDL2 Assets" FontSize="24"
+                                               Foreground="{DynamicResource ThemeTextMuted}" Opacity="0.5"
+                                               HorizontalAlignment="Center"/>
+                                    <TextBlock Text="还没有更多配方" FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource ThemeTextMuted}"
+                                               HorizontalAlignment="Center" Margin="0,8,0,0"/>
+                                    <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}"
+                                            Style="{StaticResource AiBtnSecondarySm}"
+                                            HorizontalAlignment="Center" Margin="0,12,0,0"/>
+                                </StackPanel>
+                            </Grid>
+                        </Grid>
+                        <DataTemplate.Triggers>
+                            <DataTrigger Binding="{Binding IsAddTile}" Value="True">
+                                <Setter TargetName="CardRoot" Property="Visibility" Value="Collapsed"/>
+                                <Setter TargetName="AddTile" Property="Visibility" Value="Visible"/>
+                            </DataTrigger>
+                        </DataTemplate.Triggers>
                     </DataTemplate>
                 </ItemsControl.ItemTemplate>
             </ItemsControl>
         </ScrollViewer>
 
-        <!-- 空态 -->
-        <Border Grid.Row="1" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Padding="40"
-                Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
+        <!-- 空态：整块虚线引导卡（设计稿空态卡口径；Border 不支持虚线，用 Rectangle 层实现） -->
+        <Grid Grid.Row="1" Margin="0,0,16,16" MinHeight="200"
+              Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVis}}">
+            <Rectangle RadiusX="16" RadiusY="16" StrokeThickness="1.5"
+                       StrokeDashArray="4 3" Fill="Transparent"
+                       Stroke="{DynamicResource ThemeBorder}"/>
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center">
-                <TextBlock Text="▤" FontSize="34" HorizontalAlignment="Center" Foreground="{DynamicResource ThemeTextMuted}"/>
-                <TextBlock Text="还没有配方" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" HorizontalAlignment="Center" Margin="0,10,0,0"/>
-                <TextBlock Text="用一句话描述产品零件，AI 预填工步草稿" FontSize="12" Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
-                <Button Content="新建第一个配方" Command="{Binding NewRecipeCommand}" Style="{DynamicResource FreshPrimaryButton}"
-                        FontSize="13" Padding="18,8" Cursor="Hand" HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                <TextBlock Text="📋" FontSize="26" HorizontalAlignment="Center" Opacity="0.4"/>
+                <TextBlock Text="还没有配方" FontSize="13" FontWeight="SemiBold"
+                           Foreground="{DynamicResource ThemeTextFg}" HorizontalAlignment="Center" Margin="0,10,0,0"/>
+                <TextBlock Text="用一句话描述产品零件，AI 预填工步草稿" FontSize="11.5"
+                           Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Center" Margin="0,6,0,0"/>
+                <Button Content="＋ 新建配方" Command="{Binding NewRecipeCommand}"
+                        Style="{StaticResource AiBtnSecondarySm}" HorizontalAlignment="Center" Margin="0,14,0,0"/>
             </StackPanel>
+        </Grid>
+
+        <!-- 底部说明卡 -->
+        <Border Grid.Row="2" Style="{StaticResource AiFootBar}" Margin="0,0,0,0">
+            <TextBlock FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap">
+                <Run Text="配方文件保存在 "/><Run Text="00_ExeBuild\Data\Recipes\*.json"
+                     Foreground="{DynamicResource ThemePrimary}" FontFamily="Consolas"/>
+                <Run Text="（现场数据，不入库）· 同一时刻只有一份配方处于「启用中」，监控台按启用配方跑工步"/>
+            </TextBlock>
         </Border>
     </Grid>
 </UserControl>

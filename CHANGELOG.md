@@ -2,6 +2,154 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.12（2026-11-23）全页面与弹窗按设计稿 C 方案「熔金流场」逐页整改 + 明暗双主题目检
+
+### 一、宿主组件体系（新增 AiStyles.xaml）
+
+- 新增 `AIris.WPF/Styles/AiStyles.xaml`：卡片 / 页头 / 按钮五档（Primary/Secondary/Ghost/Danger/DangerGhost，含 Sm 小号）/
+  输入框 / 下拉框 / 状态胶囊 / KPI 块 / 开关 / 滑块 / 复选框等全部宿主组件样式；按钮统一
+  **半高圆角药丸**（圆角 = 实际高度/2，见第九节 PillRadius 转换器）、
+  输入高 34 圆角 10、卡片圆角 16，在 `App.xaml` 的 ThemeLight 之后合并；
+- **按钮族替换**：页面与弹窗一律使用 `AiBtn*`，弃用库 `FreshButton`（CornerRadius=4 方角是用户反馈
+  "按钮太尖锐"的根因）；破坏性主操作用 `AiBtnDanger`，监控 "拿走一个（NG 模拟）" 用 `AiBtnDangerGhostSm`；
+- **复选框 / 开关自绘**：库模板走 `Brush.Shell.*` 契约键（深色下错色），改为 Theme* 键自绘；
+  开关未选中轨道用 `ThemeBorder` 实色（深色下否则看不出是开关）；
+- **主题键扩充**：`ThemePrimaryHover` / `ThemePrimaryPressed` / `ThemeOnPrimary` / `ThemePrimaryGrad` /
+  `ThemeStageFootBg` / `ThemePrimaryBorder`，明暗两套字典同键同值语义。
+
+### 二、顶栏与导航胶囊（MainWindow.xaml）
+
+- 导航胶囊 = Icon + 文字，**去掉前缀圆点**；半高圆角药丸、高 30、Padding 0 14、间距 4、水平居中；
+  选中白底橙字、hover 白 16%；
+- 状态胶囊高 22、三窗钮 32 高、新自绘 `AiTopCloseButton`（hover 红底药丸）；
+- 内容区 Margin `20,16,20,20`；顶栏交互元素全部 `WindowChrome.IsHitTestVisibleInChrome` 放行。
+
+### 三、五页按设计稿重写
+
+- **运行监控台**（data-page="monitor"）：左舞台 `*` + 右列 400 双列布局；舞台脚注（分辨率 / fps / 引擎 / 判定说明）；
+  NG 告警卡（红描边 + 声光已触发 chip + 详情/重检）；工步序列按设计稿着色（**当前步橙点 + 浅橙底 + 半粗**、
+  已完成绿 ✓、未到灰 ○）；运行日志自动滚底；底部演示控制条；检测框三态上色（待补蓝 / OK 绿 / NG 红）；
+- **配方中心**（recipe）：4 列卡片网格 + 虚线引导卡哨兵（`RecipeCardVm.IsAddTile` + `CreateAddTile`，
+  空位引导"新建配方"）；
+- **检测引擎**（engine）：3 列引擎卡（当前引擎橙描边 + 许可证 chip）+ 推理参数 + 服务状态 KPI +
+  **就地「测试连接」反馈**（不再弹窗打断，`EngineViewModel` 状态行直显）；
+- **审计追溯**（audit）：日期 / 判定筛选 + 4 KPI + Grid 自绘表格（GridViewRowPresenter 按列渲染）+ 空态；
+- **设备与集成**（settings）：左 236 设备列表 + **活连接状态点**（`DeviceItem : ViewModelBase` +
+  `RefreshStatus()`，绿/橙/灰随实际连接与 Mock 态刷新）+ 右连接参数 + Mock 动作条；
+- **配方编辑器**（editor，设计稿 `[vNext]` 必须项落地）：左 236 工步序列 + 中配置/判定 + 画布 440 +
+  **300px 右栏 ROI 清单**（旧版清单在画布下方）。
+
+### 四、五弹窗统一整改
+
+- `ConfirmDialog` / `ShotDialog` / `NewRecipeDialog` / `NgDetailDialog` / `RoiFullscreenDialog` 统一口径：
+  根底 `ThemePanelBg`（深色跟随宿主）、按钮 `AiBtn*` 药丸、底部按钮区 **上方 1px 分隔线 + 12 上内距 + 右对齐**、
+  内容区不再重复标题条标题（标题条已示"存档详情 · SN"/"NG 详情 · 工步 N"）；
+- 新建配方向导：按设计稿补**步骤指示器**（18px 圆 + 编号 + 26px 连接线；当前步橙底白字加粗，
+  未到步面板底灰字），两步切换联动；
+- 存档详情 / NG 详情：所有信息行 `TextWrapping="Wrap"`（长文件名/规则快照不再被裁），
+  判定色从 `Brushes.OrangeRed/SeaGreen` 改为 `ThemeNg/ThemeOk`。
+
+### 五、行为与数据修复
+
+- **编辑器进入即自动出画面**：`RecipeEditorViewModel.OnEnter` 置 `PreviewOn=true`
+  （旧版要手动点"启动取像"，首屏一片网格，标画入口像坏了）；`StartPreview` 内部判运行态，
+  监控检测在跑时复用同源帧，不双开相机；
+- **页面 OnLeave 对称收尾**：`PageViewModelBase` 新增 `OnLeave()`，`MainViewModel` 切页时先旧页
+  `OnLeave` 再新页 `OnEnter`；编辑器离开即停预览取像（不留空转相机线程与订阅）；
+- **空场不再清帧**：`MonitorViewModel.OnFrame` / `RecipeEditorViewModel.OnPreviewFrame` 空场出帧时
+  保留上一帧（`img ?? FrameImage`）——透明 Mock 帧叠舞台网格就是"空台面"真实观感，
+  "等待画面…"只留给真正无帧/断流；
+- **审计截图 flatten 到不透明台面**：`RunMonitor.FlattenForArchive` 把透明 Mock 帧铺到
+  `#E8EDF5` + 64px 网格台面再落盘（旧版透明 PNG 在弹窗里一片空白，"缺件 NG"失去追溯价值；
+  真实相机帧不透明会整幅覆盖，无副作用）；
+- **审计查询倒读修复**：`JsonAuditStore.Query` 改文件尾→头倒读，**最新记录在前**；满 `maxRows=500`
+  时截**最旧**而不是最新（旧实现正读 + 截尾，导致新记录永远查不到）。
+
+### 六、验证
+
+- MSBuild `AIris.WPF` 0 error（Debug / AnyCPU，64 位）；
+- **明暗双主题全页目检**：运行监控台 / 配方中心 / 配方编辑器 / 检测引擎 / 审计追溯 / 设备与集成，
+  对照设计稿 C 方案逐项核过（橙粉渐变顶栏、胶囊导航、大圆角卡片、浅色默认）；
+- **弹窗明暗目检**：新建配方向导两步（步骤指示器切换正常）、存档详情、NG 详情、ROI 全屏标画、
+  保存成功提示；截图区台面网格可见、按钮区上分隔线到位、标题不重复；
+- **物理点击回归**：顶栏 6 导航胶囊、主题切换钮、三窗钮（最小化 / 最大化-还原 / 关闭）、
+  编辑器进入自动取像（按钮显"停止取像"）与离开停取像（日志"[预览] 编辑页取像关闭"）全部实测通过；
+- 审计页新记录生成后倒序显示在首行，"⋯"存档详情弹窗截图带台面网格。
+
+### 七、清理
+
+- 删除 `Tools/Shots/` 下 210 张调试中间截图，保留被 git 跟踪的 18 张文档配图与基准图。
+
+### 八、屏幕适配（DPI / 窗口比例 / 复用不变形）
+
+- **新增 `AIris.WPF/app.manifest`（Per-Monitor V2 DPI 感知）**：`csproj` 以
+  `<ApplicationManifest>` 引用。原工程没有清单，进程是 System DPI Aware——单屏 100% 正常，
+  但把窗口拖到 125%/150% 缩放的显示器、主副屏 DPI 不同、或远程会话（向日葵/RDP）时，
+  Windows 会对整窗做**位图拉伸**，胶囊圆角、文字、1px 描边全部发虚/变形（"胶囊变尖"的
+  环境侧根因）。实测进程 awareness 由 1 变 2（PerMonitorV2），WPF 按 DIP 矢量重绘；
+- **胶囊基类改自适应高度**：`AiBtn`/`AiBtnSm`/`AiBtnGhostSm`/`AiInput`/`AiCombo`/`AiChip`/
+  `AiSwitch`/`AiSlider` 与顶栏导航胶囊、状态胶囊、三窗钮、主题钮全部 `Height` → `MinHeight`。
+  任何 DPI/字体缩放/布局挤压下胶囊只会整体变高，不会被固定行高裁掉内容或压扁
+  （圆角如何跟着高度自适应见第九节）；
+- **去掉 `SnapsToDevicePixels`**（AiBtn 模板 + 导航胶囊模板各一处）：它会把圆角强制按设备
+  像素切台阶，非整数缩放（125%/150%）下正是"胶囊边缘发毛、看着尖"的直接原因；主窗与
+  5 个弹窗（Confirm/Shot/NewRecipe/NgDetail/RoiFullscreen）统一加 `UseLayoutRounding="True"`，
+  布局对齐设备像素但圆角保持抗锯齿；
+- **页面内显式固定高度同步清理**：审计"查询"按钮、演示零件下拉、NG 卡"声光报警已触发"
+  徽章、日志 OK/NG 徽章、引擎"测试连接"结果徽章均改 `MinHeight`；
+- **验证**：窗口 1920×1040 / 1600×900 / 1200×760（MinSize）三档实测，"暂停检测"按钮
+  高度恒为 32 DIP、宽度随窗口不变，布局不挤压变形；设计稿参数对照（导航 30/Padding 0 14、
+  按钮 32 与 26、chip 22）。
+
+### 九、胶囊"太尖锐"根因修复（WPF CornerRadius 与 CSS border-radius 语义不同）
+
+- 用户反馈胶囊"太尖锐、和设计图弧度明显不一样"。把设计稿用 Edge 渲染成图、与实机截图
+  **同比例放大 6× 并排比对**后定位到根因——不是圆角写小，而是**写大反而变椭圆**：
+  · 设计稿 `.btn{border-radius:999px}`：浏览器按"相邻圆角半径之和不得超过边长"的规则
+    把所有半径**统一按比例缩小**，最终半径 = 高度/2，端头是**正圆半圆**，顶边/底边
+    各留一段水平直边。实测渲染图顶部行宽 / 最大行宽 = **0.675**；
+  · WPF `Border.CornerRadius="999"`：按两个方向**分别钳制**（水平→宽/2、垂直→高/2），
+    画出来是**椭圆角**——宽按钮两端被拉成长椭圆、收弧太急，视觉上就是"尖锐/橄榄球"。
+    同一按钮实测顶部行宽比只有 **0.226**；
+- **修复**：新增 `Converters.PillRadiusConverter`（`ActualHeight` → `CornerRadius = 高度/2`），
+  资源键 `PillRadius` 注册在 `Styles/AiStyles.xaml`（MainWindow 内再就地注册一份，
+  避免 `Window.Resources` 的 StaticResource 解析早于合并字典）。全部药丸模板改为
+  `CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self},
+  Converter={StaticResource PillRadius}}"`，共 11 处模板绑定：`AiStyles.xaml` 6 处
+  （`AiBtn` 主模板 1 处，全部按钮档位 `BasedOn` 共用；`AiChipBase`/`AiChipPlain` 2 处；
+  `AiSwitch` 轨道 1 处；`AiSlider` 左右两段轨道 2 处）+ `MainWindow.xaml` 5 处
+  （导航胶囊 1、顶栏幽灵钮/关闭钮模板 2、顶栏状态胶囊 2）；
+- **为什么不写死半高值**：32 高按钮写 `CornerRadius=16` 在正常字号下正确，但系统字体放大 /
+  布局撑高后圆角就不再是半高（实测字号 26 时按钮自动长到 35），药丸退化成圆角矩形。
+  绑定 `ActualHeight` 后**高度怎么变圆角都跟着变**，任何 DPI、字体、窗口比例下都是同一个
+  正圆药丸——这才满足"基类控件复用不变形"的要求。`CornerRadius` 不参与 Measure/Arrange，
+  不会造成布局循环；
+- **验证**：同一「暂停检测」按钮在 1920×1040 / 1600×900 / 1200×760 三档窗口实测，
+  顶部行宽比 **0.667 / 0.675 / 0.675**，与设计稿渲染值 0.675 一致（修复前 0.226 椭圆）；
+  6× 放大并排图弧度完全重合；浅色/深色双主题、监控/配方中心/配方编辑器/检测引擎/
+  审计追溯/设备与集成六页目检通过；字号 12→22 时按钮高度恒为 32、字号 26 起自动长高，
+  胶囊形状始终成立；
+- 顺带修正 `MainWindow.xaml` 头部过期注释：2026-11-22 的 `CornerRadius 7` 短圆角口径
+  已作废（当时误判纯药丸"太尖锐"，实际是 WPF 椭圆角造成的），统一改为设计稿半高药丸口径。
+
+### 十、目检脚本 `shot_ui.ps1` 导航坐标修复（audit/settings 截图内容重复）
+
+- **根因**：导航从底部 Dock 收进顶栏并水平居中后，脚本仍用旧窗口内坐标
+  （monitor=222 / recipe=352 / engine=481 / audit=619 / settings=749，y=21），实际点到品牌区与
+  空白处，`audit.png` 与 `settings.png` 落到同一页面；
+- **改为 UIA 动态定位**：按「名称 + `ControlType=RadioButton`」查顶栏胶囊 `BoundingRectangle` 取中心。
+  为此导航 `RadioButton` 增加 `AutomationProperties.Name="{Binding Title}"`——原先模板直接绑
+  `Icon`/`Title`、控件 `Content` 为空，UIA `Name` 是空串（读屏与自动化工具都取不到名字），
+  本项同时修正了导航的无障碍名称；
+- **脚本屏幕适配**：进程启动即 `SetProcessDPIAware()`（`GetWindowRect` / `SetCursorPos` / UIA 统一
+  物理像素，125%/150% 缩放下不再整体偏移）；启动后 `SW_MAXIMIZE` 统一 1920×1040 目检口径；
+  UIA 不可用时回落硬编码基准，并按「导航水平居中 + 当前 DPI」换算（居中偏移不随窗口宽度变）；
+- **`-outDir` 参数**：验证时可输出到临时目录，避免覆盖 git 跟踪的 README 文档配图；
+- **验证**：全 6 页一次跑通，日志逐页打印 `(uia)` 与真实坐标（682/780/881/982/1089, y=26），
+  六张 PNG 哈希两两不同；审计追溯 / 设备与集成 / 配方编辑器目检正确；
+- 顺带修正 `MainWindow.xaml` 三窗钮过期注释（关闭钮已是宿主 `AiTopCloseButton`，
+  不再用库 `KxTitleCloseButton`）。
+
 ## V0.1.11（2026-11-23）配方编辑器 ROI 画布比例对齐监控台 + 全屏标画弹窗 + 帧到达重绘修复
 
 ### 一、ROI 画布比例与运行监控台一致（修复 V0.1.10 遗留待办）

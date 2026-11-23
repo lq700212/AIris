@@ -15,12 +15,15 @@ namespace AIris.WPF.Views
             DataContextChanged += (s, e) => { _vm = DataContext as AuditViewModel; };
         }
 
-        /// <summary>存档详情按钮（DataTemplate 里拿行 DataContext）。</summary>
+        /// <summary>存档详情按钮（DataTemplate 里拿行 DataContext）。
+        /// 2026-11-23 修复：改为点击时从自身 DataContext 取 VM——旧版依赖 DataContextChanged
+        /// 缓存的 _vm，页面由 DataTemplate 重建时缓存可能为空，表现为点「⋯」完全无反应。</summary>
         private void Shot_Click(object sender, RoutedEventArgs e)
         {
             var btn = sender as FrameworkElement;
-            var row = btn?.DataContext as AuditRowVm;
-            if (_vm != null && row != null) _vm.OpenShot(row);
+            var row = btn == null ? null : btn.DataContext as AuditRowVm;
+            var vm = DataContext as AuditViewModel;
+            if (vm != null && row != null) vm.OpenShot(row);
         }
     }
 }

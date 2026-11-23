@@ -9,22 +9,25 @@
   │   ContentControl（CurrentPage → DataTemplate 映射 6 个页面）              │ ← 内容 *
   │                                                                          │
   └──────────────────────────────────────────────────────────────────────────┘
-  设计要点（2026-11-22 用户定版 + 当日点击/形状两轮返工）：
-  · 底部 Dock 收拢进顶栏（菜单栏形态）；导航胶囊 = 库 KxLangButton 的 BasedOn 派生
-    （AiNavCapsule）——形状口径归库：CornerRadius 7 / Padding 12,6 / FontSize 12.5 /
-    Cursor Hand 全库值（用户反馈自绘 CornerRadius=99 纯药丸"太尖锐不好看"；
-    HJVision 主窗顶栏全钮 CornerRadius=7 即库口径，用户点名参考）；
-  · 配色因顶栏橙粉渐变彩底宿主化：库 KxLangButton 的 Shell 键色（FgDim 灰字、
-    选中实主色底与渐变撞色）不适用——派生只换配色：未选中白字 / hover 白 20% 垫 /
-    选中白底胶囊+主色字（反转强调）；RadioButton+GroupName="DockNav" 天然互斥；
+  设计要点（2026-11-22 定版 + 2026-11-23 全面对位设计稿 C 方案重做）：
+  · 底部 Dock 收拢进顶栏（菜单栏形态）；导航胶囊 AiNavCapsule 是**自绘纯药丸**，
+    形状口径 = 设计稿 `.navpill .item`：CornerRadius 取半高（CSS 变量 radius-pill）、
+    高 30、Padding 0 14、项间距 4、FontSize 12.5、Cursor Hand。
+    【口径变更】2026-11-22 曾按 HJVision 主窗的 CornerRadius 7 短圆角做过一版，
+    2026-11-23 用户拿设计稿逐像素比对后要求「还原设计图一模一样的弧度」，
+    改为半高圆角药丸（PillRadius 转换器）；7 圆角旧口径作废，不要再回退。
+  · 配色因顶栏橙粉渐变彩底宿主化：未选中白字 92% / hover 白 16% 药丸垫 /
+    选中白底药丸 + 主色字（反转强调）；RadioButton+GroupName="DockNav" 天然互斥；
   · 【WindowChrome 命中红线】ChromeBorderlessWindow 的 WindowChrome.CaptionHeight
     （本窗 CaptionHeight=52=顶栏全高）区域内点击默认被吞成拖窗——顶栏内全部交互
     元素（导航胶囊/🌓/三窗钮）必须设 shell:WindowChrome.IsHitTestVisibleInChrome=True，
     否则"按钮点击都没响应"（库 ChromeDialogWindow 头注释同款血泪）；顶栏其余空白
     区域即系统拖动区（原 DragMove 事件随之删除，勿回加）；
-  · 顶栏静态胶囊（引擎/相机在线）CornerRadius 同步 99→7 对齐形状口径；
-  · 三窗钮复用库 KxTitleMin/Max/CloseButton（hover 内置：关闭红底），glyph 跟随
-    StateChanged 事件（双击顶栏空白走系统最大化通道也同步）；
+  · 顶栏静态胶囊（引擎/相机在线）半高圆角 / 高 22 / Padding 0 10，
+    与设计稿 `.status .chip` 同口径（2026-11-23 由 7 圆角改为药丸）；
+  · 三窗钮与主题钮用自绘 AiTopGhostButton（hover 白 16% 半高药丸垫），关闭钮
+    AiTopCloseButton（hover 红底半高药丸垫）——不再用库 KxTitleCloseButton 的
+    整块方形红底（无边框圆角窗右上角方角 hover 垫与窗体 16 圆角打架）；
   · 【窗体圆角（2026-11-22 用户反馈：窗口化要圆角、全屏不要）】分层真圆角三件套
     由基类 ChromeBorderlessWindow 提供（AllowsTransparency+透明窗底+根 Border 圆角
     +Clip 裁溢出），本窗只负责：CornerRadius=16（C 方案 radius 16 口径，与弹窗卡片
@@ -32,24 +35,35 @@
     兜底）——Window 级禁写 Background（基类 Transparent 才能四角透桌面，写本地值
     =四角实底直角）；最大化归零/还原恢复由基类 StateChanged 联动，XAML 初始
     WindowState=Maximized 的补偿见 code-behind Loaded；
-  · 🌓/最小化/最大化钮 hover 白 20% 圆角垫（AiTopGhostButton，2026-11-22 用户反馈
-    对齐导航胶囊悬停效果；关闭钮保持库 KxTitleCloseButton 红底 hover 不动）。
+  · 🌓/最小化/最大化钮 hover 白 16% 药丸垫（AiTopGhostButton）；关闭钮 hover 红底；
+  · 【屏幕适配（2026-11-23）】本窗与全部宿主基类样式统一用 MinHeight/MinWidth +
+    UseLayoutRounding，不用固定 Height/Width 承载形状；胶囊圆角由 PillRadius 转换器
+    绑定 ActualHeight/2——DPI 150%/字体放大/窗口比例变化时胶囊整体变长高、圆角同步
+    变成新的半高，永远是正圆药丸端头（WPF 的 999 会画椭圆角，详见 AiStyles.xaml 头部）。
+    DPI 感知见 AIris.WPF/app.manifest（PerMonitorV2）。
 -->
 <views:ChromeBorderlessWindow x:Class="AIris.WPF.Views.MainWindow"
                              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                              xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
                              xmlns:views="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
+                             xmlns:conv="clr-namespace:AIris.WPF.Converters"
                              xmlns:vm="clr-namespace:AIris.WPF.ViewModels"
                              xmlns:v="clr-namespace:AIris.WPF.Views"
                              WindowStartupLocation="CenterScreen"
                              WindowState="Maximized"
                              CaptionHeight="52"
                              CornerRadius="16"
+                             UseLayoutRounding="True"
                              Title="AI 智瞳"
                              Icon="/Assets/app.ico"
                              MinWidth="1200" MinHeight="760">
     <Window.Resources>
+        <!-- 药丸圆角转换器（ActualHeight → 半高正圆）：本窗顶栏胶囊/三窗钮模板用到，
+             与 Styles/AiStyles.xaml 同一实现；重复注册只是因为 Window.Resources 的
+             StaticResource 解析早于某些合并顺序，就地定义最稳（转换器无状态，零成本） -->
+        <conv:PillRadiusConverter x:Key="PillRadius"/>
+
         <!-- 页面映射：VM 类型 → 页面 UserControl（导航切换的唯一机制） -->
         <DataTemplate DataType="{x:Type vm:MonitorViewModel}"><v:MonitorPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:RecipeListViewModel}"><v:RecipeListPage/></DataTemplate>
@@ -58,42 +72,51 @@
         <DataTemplate DataType="{x:Type vm:AuditViewModel}"><v:AuditPage/></DataTemplate>
         <DataTemplate DataType="{x:Type vm:SettingsViewModel}"><v:SettingsPage/></DataTemplate>
 
-        <!-- 导航胶囊（库 KxLangButton 的 BasedOn 派生）：形状归库、配色宿主化（见头注释）。
-             GroupName 固定值跨 ItemTemplate 容器互斥（WPF RadioButtonGroup 按 GroupName 注册）；
-             FocusVisualStyle 清空防 WPF 默认焦点虚线框（上轮"胶囊效果奇怪"的元凶之一）。 -->
-        <Style x:Key="AiNavCapsule" TargetType="RadioButton" BasedOn="{StaticResource KxLangButton}">
+        <!-- 导航胶囊（对位设计稿 .navpill .item，2026-11-23 用户定版：Icon + 文字，不要圆点）：
+             半高圆角药丸（PillRadius 绑定 ActualHeight/2）/ 高 30 / Padding 0 14 /
+             间距 4（左右各 2）/ 未选中 92% 白字 / hover 白 16% / 选中白底主色字。
+             GroupName 固定值跨 ItemTemplate 容器互斥；FocusVisualStyle 清空防焦点虚线框。
+             Icon 字符沿用现有绑定（用户明确：导航 Icon 不改）。
+             屏幕适配（2026-11-23）：用 MinHeight 而不是 Height——窗口/字体/DPI 变化时胶囊
+             整体变高、圆角同步变半高，永远是正圆端头（WPF 的 CornerRadius=999 会画椭圆角，
+             已废弃，详见 AiStyles.xaml 头部 PillRadius 说明）；
+             模板 Border 不设 SnapsToDevicePixels（它会把圆角强制按设备像素切台阶）。 -->
+        <Style x:Key="AiNavCapsule" TargetType="RadioButton">
             <Setter Property="GroupName" Value="DockNav"/>
-            <Setter Property="Foreground" Value="White"/>
-            <Setter Property="Margin" Value="4,0"/>
+            <Setter Property="Foreground" Value="#EBFFFFFF"/>
+            <Setter Property="MinHeight" Value="30"/>
+            <Setter Property="Padding" Value="14,0"/>
+            <Setter Property="Margin" Value="2,0"/>
+            <Setter Property="FontSize" Value="12.5"/>
+            <Setter Property="Cursor" Value="Hand"/>
             <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="RadioButton">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}"
                                 Padding="{TemplateBinding Padding}">
-                            <StackPanel Orientation="Horizontal">
-                                <TextBlock Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center"/>
-                                <TextBlock Text="{Binding Title}" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding Icon}" FontSize="12" VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"/>
+                                <TextBlock Text="{Binding Title}" Margin="6,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{TemplateBinding Foreground}"/>
                             </StackPanel>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#29FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="Bd" Property="Background" Value="White"/>
                                 <Setter Property="Foreground" Value="{DynamicResource ThemePrimary}"/>
-                                <Setter Property="FontWeight" Value="Bold"/>
+                                <Setter Property="FontWeight" Value="SemiBold"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
         </Style>
-        <!-- 顶栏幽灵钮（🌓/最小化/最大化共用）：hover 白 20% 圆角 7 垫——效果对齐
-             导航胶囊悬停（用户点名）；形状口径同胶囊 CornerRadius 7。宽度由元素逐个
-             设（三窗钮 40=库 SysButtonWidth 口径，🌓 自适应），高度随顶栏 52（垫
-             Margin 4,8 → 32×36 视觉居中）。关闭钮不适用本样式（保持库红底 hover）。 -->
+        <!-- 顶栏幽灵钮（🌓/最小化/最大化共用）：hover 白 16% 半高药丸垫，形状口径同导航胶囊 -->
         <Style x:Key="AiTopGhostButton" TargetType="Button">
             <Setter Property="Background" Value="Transparent"/>
             <Setter Property="Foreground" Value="White"/>
@@ -102,16 +125,42 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="7"
-                                Margin="4,8" Padding="{TemplateBinding Padding}">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}"
+                                Margin="3,0" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Bd" Property="Background" Value="#33FFFFFF"/>
+                                <Setter TargetName="Bd" Property="Background" Value="#29FFFFFF"/>
                             </Trigger>
                             <Trigger Property="IsEnabled" Value="False">
                                 <Setter Property="Foreground" Value="#66FFFFFF"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- 顶栏关闭钮（药丸口径与 AiTopGhostButton 一致：hover 红底半高药丸垫，
+             不再用库 KxTitleCloseButton 的整块方形红底——无边框圆角窗右上角方角 hover
+            垫会与窗体圆角打架，用户 2026-11-23 反馈"胶囊太尖锐"同源问题） -->
+        <Style x:Key="AiTopCloseButton" TargetType="Button">
+            <Setter Property="Background" Value="Transparent"/>
+            <Setter Property="Foreground" Value="White"/>
+            <Setter Property="MinWidth" Value="40"/>
+            <Setter Property="MinHeight" Value="32"/>
+            <Setter Property="FontSize" Value="12"/>
+            <Setter Property="Cursor" Value="Hand"/>
+            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Bd" Background="Transparent" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Margin="3,0">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemeNg}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -137,7 +186,6 @@
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                     <ColumnDefinition Width="Auto"/>
@@ -146,7 +194,7 @@
                 <!-- 品牌：logo + 名称（WindowChrome 拖动区）。品牌标 = C 方案「鸢尾绽放」矢量
                      （与 Assets\app.ico 同源几何：三瓣水滴花绕 120° 旋转 + 中心瞳点；顶栏橙粉
                      渐变即图标底板同源色，白色符号对齐 app icon 口径，随 Viewbox 无损缩放） -->
-                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="16,0,6,0" VerticalAlignment="Center">
+                <StackPanel Grid.Column="0" Orientation="Horizontal" Margin="20,0,8,0" VerticalAlignment="Center">
                     <Viewbox Width="26" Height="26" VerticalAlignment="Center">
                         <Canvas Width="128" Height="128">
                             <Path Data="M64,24 C53,37 52,47 64,54 C76,47 75,37 64,24Z" Fill="White"/>
@@ -167,9 +215,9 @@
                     <TextBlock Text="AIris Monitor" FontSize="11" Foreground="#B3FFFFFF" Margin="8,1,0,0" VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- 菜单导航（收拢自底部 Dock）：库 KxLangButton 派生胶囊（形状库口径+配色宿主化），
-                     IsHitTestVisibleInChrome 放行 WindowChrome 命中区（见头注释红线） -->
-                <ItemsControl Grid.Column="1" ItemsSource="{Binding DockPages}" VerticalAlignment="Center" Margin="10,0,0,0">
+                <!-- 菜单导航（收拢自底部 Dock）：占满剩余宽度并居中，对位设计稿 .navpill -->
+                <ItemsControl Grid.Column="1" ItemsSource="{Binding DockPages}" VerticalAlignment="Center"
+                              HorizontalAlignment="Center">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate>
                             <StackPanel Orientation="Horizontal" IsItemsHost="True"/>
@@ -178,6 +226,7 @@
                     <ItemsControl.ItemTemplate>
                         <DataTemplate>
                             <RadioButton Style="{StaticResource AiNavCapsule}"
+                                         AutomationProperties.Name="{Binding Title}"
                                          Command="{Binding DataContext.NavigateCommand, RelativeSource={RelativeSource AncestorType=Window}}"
                                          CommandParameter="{Binding Id}"
                                          IsChecked="{Binding IsCurrent, Mode=OneWay}"
@@ -187,42 +236,47 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- 右侧：状态胶囊（固定高 + 文本四向居中，2026-11-22 用户反馈；WindowChrome 拖动区）
-                     + 主题切换 -->
-                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,10,0">
-                    <Border CornerRadius="7" Background="#33FFFFFF" Height="26" Padding="10,0" Margin="0,0,8,0">
-                        <TextBlock Text="{Binding EngineIndicator}" FontSize="11" Foreground="White"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                <!-- 右侧：状态胶囊（高 22 药丸 + 6px 圆点，对位设计稿 .status .chip）+ 主题切换 -->
+                <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
+                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="6" Height="6" Fill="#FFB6F0CE" Margin="0,0,5,0"/>
+                            <TextBlock Text="{Binding EngineIndicator}" FontSize="11" Foreground="White"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Border>
-                    <Border CornerRadius="7" Background="#33FFFFFF" Height="26" Padding="10,0" Margin="0,0,8,0">
-                        <TextBlock Text="相机 在线" FontSize="11" Foreground="White"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0">
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <Ellipse Width="6" Height="6" Fill="#FFB6F0CE" Margin="0,0,5,0"/>
+                            <TextBlock Text="相机在线" FontSize="11" Foreground="White"
+                                       VerticalAlignment="Center"/>
+                        </StackPanel>
                     </Border>
                     <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
-                            Style="{StaticResource AiTopGhostButton}" FontSize="14"
-                            Margin="4,0,0,0" ToolTip="切换深浅主题"
+                            Style="{StaticResource AiTopGhostButton}" FontSize="14" MinWidth="32" MinHeight="26"
+                            Margin="2,0,0,0" ToolTip="切换深浅主题"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                 </StackPanel>
 
-                <!-- 三窗钮：最小化/最大化用 AiTopGhostButton（hover 白垫圆角 7，见样式注释）；
-                     关闭钮保持库 KxTitleCloseButton（hover 红底警示内置）；IsHitTestVisibleInChrome
-                     放行命中区 -->
-                <StackPanel Grid.Column="4" Orientation="Horizontal" VerticalAlignment="Stretch">
-                    <Button Style="{StaticResource AiTopGhostButton}" Width="40" Content="—" FontSize="13"
+                <!-- 三窗钮：最小化/最大化/关闭全用宿主自绘药丸钮（AiTopGhostButton /
+                     AiTopCloseButton，hover 白垫 / 红底），形状口径与导航胶囊一致；
+                     IsHitTestVisibleInChrome 放行命中区 -->
+                <StackPanel Grid.Column="3" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,8,0">
+                    <Button Style="{StaticResource AiTopGhostButton}" MinWidth="40" MinHeight="32" Content="—" FontSize="13"
                             Click="Min_Click" ToolTip="最小化"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
-                    <Button Style="{StaticResource AiTopGhostButton}" Width="40" x:Name="MaxBtn" Click="Max_Click" ToolTip="最大化 / 还原"
+                    <Button Style="{StaticResource AiTopGhostButton}" MinWidth="40" MinHeight="32" x:Name="MaxBtn" Click="Max_Click" ToolTip="最大化 / 还原"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
                         <TextBlock x:Name="MaxGlyph" Text="▢" FontSize="11"/>
                     </Button>
-                    <Button Style="{DynamicResource KxTitleCloseButton}" Content="✕" Click="Close_Click" ToolTip="关闭"
+                    <Button Style="{StaticResource AiTopCloseButton}" Content="✕" Click="Close_Click" ToolTip="关闭"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- ===== 内容区：页面切换 ===== -->
-        <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,16"/>
+        <!-- ===== 内容区：页面切换（设计稿 .page padding 16 20 20） ===== -->
+        <ContentControl Grid.Row="1" Content="{Binding CurrentPage}" Margin="20,16,20,20"/>
         </Grid>
     </Border>
 </views:ChromeBorderlessWindow>

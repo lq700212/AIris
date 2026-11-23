@@ -17,6 +17,9 @@
     <!-- exe 内嵌图标（资源管理器/桌面快捷方式/任务栏固定显示的是这张）；
          运行窗口图标另见 MainWindow.xaml 的 Window.Icon（两者是独立的两件事，都要设） -->
     <ApplicationIcon>Assets\app.ico</ApplicationIcon>
+    <!-- Per-Monitor V2 DPI 清单（2026-11-23 屏幕适配整改）：见 app.manifest 头注释；
+         缺它时跨不同缩放的显示器拖动会出现整窗位图拉伸，胶囊圆角/文字变形 -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
   <ItemGroup>

@@ -18,6 +18,9 @@
                 <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/ShellStyles.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/Kaleidoscope.UI;component/Themes/DefaultLight.xaml" />
                 <ResourceDictionary Source="pack://application:,,,/AIris.WPF;component/Styles/ThemeLight.xaml" />
+                <!-- 宿主共享组件样式（卡片/页头/药丸按钮/输入/胶囊/开关/滑块）：颜色走 Theme* 动态键，
+                     必须排在主题字典之后，主题热切换时自动跟随（本字典不会被 ThemeService 替换） -->
+                <ResourceDictionary Source="pack://application:,,,/AIris.WPF;component/Styles/AiStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

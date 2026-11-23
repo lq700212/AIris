@@ -21,7 +21,9 @@ namespace AIris.WPF.Views
             Badge.Text = rec.Sn + " · " + rec.Time.ToString("HH:mm:ss");
             bool ng = string.Equals(rec.Verdict, "NG", StringComparison.OrdinalIgnoreCase);
             VerdictText.Text = "判定：" + rec.Verdict + (ng ? " · " + rec.NgReason : "");
-            VerdictText.Foreground = ng ? System.Windows.Media.Brushes.OrangeRed : System.Windows.Media.Brushes.SeaGreen;
+            // 判定色走主题键（ThemeNg/ThemeOk）：旧版写死 OrangeRed/SeaGreen，
+            // 深色主题下 SeaGreen 对比度偏低且无法随主题切换（2026-11-23 目检整改）
+            VerdictText.Foreground = (System.Windows.Media.Brush)FindResource(ng ? "ThemeNg" : "ThemeOk");
             StepText.Text = "工步 " + rec.StepIndex + " · " + rec.StepName;
             RoiText.Text = "判定区域：" + rec.RoiId;
             RuleText.Text = "规则：" + (string.IsNullOrEmpty(rec.RuleSnapshot) ? "—" : rec.RuleSnapshot);

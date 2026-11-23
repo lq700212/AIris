@@ -1,16 +1,26 @@
 <!--
   运行监控台（设计稿 data-page="monitor" · C 方案）
 
-  ┌──────────────────────────────────────┬───────────────────────┐
-  │ 相机画面卡（主色描边）                 │ 当前工步引导卡（主操作） │
-  │  Image（Mock 合成）+ Canvas 检测框叠加 │  工步 3/7 · 名称        │
-  │  叠加框 = 主色边框 + 类目标签          │  预期 / 判定规则行       │
-  │ 卡脚：分辨率 · fps · 推理耗时         │  稳定帧进度 + 启停按钮  │
-  ├──────────────────────────────────────┤ NG 告警卡（左红条,NG态） │
-  │ 演示控制卡（Mock 专用：放/取/摆齐）    │ 工步序列卡（列表）       │
-  └──────────────────────────────────────┴───────────────────────┘
-  叠加框由 code-behind 在 Canvas 上按画面渲染区比例绘制（DrawBoxes），
-  语义红线：检测框标签不带置信度（AGENTS.md 铁律 11）。
+  ┌────────────────────────────────────────────┬──────────────────────┐
+  │ 取像舞台卡（4:3 内接 + 检测框叠加 + 内嵌脚注）│ 当前工步引导卡        │
+  │  KxImageStage（圆角裁剪）                    │  工步 7/7 · 判定胶囊  │
+  │  检测框三态：橙=待装 / 绿=已装 / 黄虚线=等待   │  预期 / 判定规则行    │
+  │  红=NG（vNext 设计稿口径，DrawBoxes 着色）    │  启动/暂停 + 引擎名   │
+  │                                              ├──────────────────────┤
+  │                                              │ NG 告警卡（红描边）   │
+  │                                              ├──────────────────────┤
+  │                                              │ 工步序列卡            │
+  │                                              ├──────────────────────┤
+  │                                              │ 运行日志（占满剩余）  │
+  ├────────────────────────────────────────────┴──────────────────────┤
+  │ 演示控制条（独立卡，Mock 三件套驱动；真机接入后隐藏）                  │
+  └───────────────────────────────────────────────────────────────────┘
+
+  布局口径（对齐设计稿）：
+  · 主区两列 = minmax(0,1fr) + 400px，gap 16（旧版 1.45*:1* 在 1920 下右列 760 过宽）；
+  · 舞台脚注 28px 高，叠在舞台内部底边（设计稿 .stage-foot），不再占卡片外一行；
+  · 演示控制条整宽独立卡放最下方（设计稿 .page 底部），旧版塞在左列底部。
+  语义红线：检测框标签永不显示置信度（AGENTS.md 铁律 12）。
 -->
 <UserControl x:Class="AIris.WPF.Views.MonitorPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -20,280 +30,300 @@
         <BooleanToVisibilityConverter x:Key="BoolToVis"/>
     </UserControl.Resources>
     <Grid>
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="1.45*"/>
-            <ColumnDefinition Width="14"/>
-            <ColumnDefinition Width="1*"/>
-        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="Auto"/>
+        </Grid.RowDefinitions>
 
-        <!-- ===== 左列：相机画面卡 + 演示控制 ===== -->
-        <Grid Grid.Column="0">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="*"/>
-                <RowDefinition Height="12"/>
-                <RowDefinition Height="Auto"/>
-            </Grid.RowDefinitions>
+        <!-- ===== 主区：左取像舞台 + 右 400px 信息列 ===== -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="16"/>
+                <ColumnDefinition Width="400"/>
+            </Grid.ColumnDefinitions>
 
-            <Border Grid.Row="0" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Padding="12"
-                    BorderBrush="{DynamicResource ThemePrimary}" BorderThickness="1">
+            <!-- 左：取像舞台卡（普通描边卡；舞台四角用 KxRoundedClip 裁圆） -->
+            <Border Grid.Column="0" Style="{StaticResource AiCard}" Padding="6" ClipToBounds="True">
                 <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="*"/>
-                        <RowDefinition Height="Auto"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- 画面 + 叠加层（库 KxImageStage 取像舞台 V2.3.6 傻瓜式：舞台底/网格/扫描/
-                         帧图/空态/叠加画布全内置——宿主只绑 FrameSource + 设 IdleText，
-                         叠加框 code-behind 取 Stage.Overlay 画；Mock 帧透明底，网格只在
-                         letterbox 与空态露出 = 全舞台一层网格+扫描（V0.1.5 口径）） -->
-                    <ui:KxImageStage Grid.Row="0" x:Name="StageGrid" SizeChanged="Stage_SizeChanged"
-                                     GridStep="64"
+                    <!-- 库 KxImageStage：舞台底/网格/扫描/帧图/空态/叠加画布全内置，
+                         宿主只绑 FrameSource + IdleText，叠加框在 Stage.Overlay 上画 -->
+                    <ui:KxImageStage x:Name="StageGrid" SizeChanged="Stage_SizeChanged"
+                                     GridStep="64" ui:KxRoundedClip.Radius="12"
                                      FrameSource="{Binding FrameImage}" IdleText="等待画面…"/>
 
-                    <!-- 卡脚信息 -->
-                    <Grid Grid.Row="1" Margin="2,10,2,0">
-                        <TextBlock Text="{Binding CameraInfo}" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"/>
-                        <TextBlock Text="位置判定 = ROI-IoU 几何规则（不依赖模型理解位置）" FontSize="11"
-                                   Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Right"/>
-                    </Grid>
+                    <!-- 舞台脚注（设计稿 .stage-foot：28px 半透明条贴舞台底边） -->
+                    <Border VerticalAlignment="Bottom" Height="28" CornerRadius="0,0,12,12"
+                            Background="{DynamicResource ThemeStageFootBg}" Padding="14,0">
+                        <Grid>
+                            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                <TextBlock Text="{Binding CameraInfo}" FontSize="10.5"
+                                           Foreground="{DynamicResource ThemeTextMuted}"/>
+                                <TextBlock Text="{Binding EngineNote}" FontSize="10.5" Margin="14,0,0,0"
+                                           Foreground="{DynamicResource ThemeTextMuted}"/>
+                            </StackPanel>
+                            <TextBlock Text="位置判定 = ROI-IoU 几何规则（不依赖模型理解位置）"
+                                       FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        </Grid>
+                    </Border>
                 </Grid>
             </Border>
 
-            <!-- 演示控制卡（Mock 三件套联动） -->
-            <Border Grid.Row="2" Background="{DynamicResource ThemePanel2Bg}" CornerRadius="14" Padding="14,10">
-                <StackPanel Orientation="Horizontal">
-                    <TextBlock Text="演示控制" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center" Margin="0,0,14,0"/>
-                    <ComboBox ItemsSource="{Binding DemoParts}" SelectedItem="{Binding SelectedPart}"
-                              Width="150" Style="{DynamicResource FreshCombo}" FontSize="12" VerticalAlignment="Center"/>
-                    <Button Content="放上一个" Command="{Binding DemoPlaceCommand}" Style="{DynamicResource FreshButton}"
-                            FontSize="12" Margin="10,0,0,0" Padding="14,6" Cursor="Hand"/>
-                    <Button Content="拿走一个（NG 模拟）" Command="{Binding DemoRemoveCommand}" Style="{DynamicResource FreshDangerButton}"
-                            FontSize="12" Margin="8,0,0,0" Padding="14,6" Cursor="Hand"/>
-                    <Button Content="一键摆齐" Command="{Binding DemoPlaceAllCommand}" Style="{DynamicResource FreshButton}"
-                            FontSize="12" Margin="8,0,0,0" Padding="14,6" Cursor="Hand"/>
-                    <Button Content="重检本步" Command="{Binding RecheckCommand}" Style="{DynamicResource FreshPrimaryButton}"
-                            FontSize="12" Margin="8,0,0,0" Padding="14,6" Cursor="Hand"/>
-                </StackPanel>
-            </Border>
-        </Grid>
+            <!-- 右列：固定 400（设计稿 minmax 右列 400px） -->
+            <Grid Grid.Column="2" x:Name="RightCol">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="Auto"/>
+                    <RowDefinition Height="*"/>
+                </Grid.RowDefinitions>
 
-        <!-- ===== 右列：当前工步引导 + NG 告警 + 工步序列 + 运行日志 ===== -->
-        <Grid Grid.Column="2" x:Name="RightCol">
-            <Grid.RowDefinitions>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="Auto"/>
-                <RowDefinition Height="*"/>
-            </Grid.RowDefinitions>
-            <!-- 当前工步引导卡（主操作：启动/暂停） -->
-            <Border Grid.Row="0" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Padding="16"
-                    BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1">
-                <Border.Effect>
-                    <DropShadowEffect Color="#18EC4899" BlurRadius="14" ShadowDepth="1" Direction="270" Opacity="0.16"/>
-                </Border.Effect>
-                <StackPanel>
-                    <Grid>
-                        <TextBlock Text="{Binding StepPos}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                        <!-- 判定胶囊（库 KxChip 圆角矩形档 + BasedOn 状态配色） -->
-                        <Border HorizontalAlignment="Right">
-                            <Border.Style>
-                                <Style TargetType="Border" BasedOn="{StaticResource KxChip}">
-                                    <Setter Property="Background" Value="{DynamicResource ThemePanel2Bg}"/>
-                                    <Style.Triggers>
-                                        <DataTrigger Binding="{Binding Verdict}" Value="ok">
-                                            <Setter Property="Background" Value="{DynamicResource ThemeOkDim}"/>
-                                        </DataTrigger>
-                                        <DataTrigger Binding="{Binding Verdict}" Value="ng">
-                                            <Setter Property="Background" Value="{DynamicResource ThemeNgDim}"/>
-                                        </DataTrigger>
-                                    </Style.Triggers>
-                                </Style>
-                            </Border.Style>
-                            <TextBlock FontSize="11" FontWeight="Bold">
-                                <TextBlock.Style>
-                                    <Style TargetType="TextBlock" BasedOn="{StaticResource KxChipText}">
-                                        <Setter Property="Text" Value="判定中"/>
-                                        <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+                <!-- 当前工步引导卡（主操作：启动/暂停） -->
+                <Border Grid.Row="0" Style="{StaticResource AiCard}" Padding="16,14,16,16">
+                    <StackPanel>
+                        <Grid>
+                            <TextBlock Text="{Binding StepPos}" FontSize="11"
+                                       Foreground="{DynamicResource ThemeTextMuted}"/>
+                            <!-- 判定胶囊（设计稿 .chip：6px 圆点 + 22 高药丸） -->
+                            <ContentControl HorizontalAlignment="Right">
+                                <ContentControl.Style>
+                                    <Style TargetType="ContentControl" BasedOn="{StaticResource AiChipMut}">
+                                        <Setter Property="Content" Value="判定中"/>
                                         <Style.Triggers>
                                             <DataTrigger Binding="{Binding Verdict}" Value="ok">
-                                                <Setter Property="Text" Value="判定 OK"/>
+                                                <Setter Property="Content" Value="判定 OK"/>
+                                                <Setter Property="Background" Value="{DynamicResource ThemeOkDim}"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource ThemeOk}"/>
                                             </DataTrigger>
                                             <DataTrigger Binding="{Binding Verdict}" Value="ng">
-                                                <Setter Property="Text" Value="判定 NG"/>
+                                                <Setter Property="Content" Value="判定 NG"/>
+                                                <Setter Property="Background" Value="{DynamicResource ThemeNgDim}"/>
                                                 <Setter Property="Foreground" Value="{DynamicResource ThemeNg}"/>
                                             </DataTrigger>
                                         </Style.Triggers>
                                     </Style>
-                                </TextBlock.Style>
-                            </TextBlock>
-                        </Border>
-                    </Grid>
+                                </ContentControl.Style>
+                            </ContentControl>
+                        </Grid>
 
-                    <TextBlock Text="{Binding StepName}" FontSize="16" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"
-                               Margin="0,8,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding ExpectLine}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"
-                               Margin="0,6,0,0" TextWrapping="Wrap"/>
-                    <TextBlock Text="{Binding RuleLine}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"
-                               Margin="0,3,0,0" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding StepName}" FontSize="17" FontWeight="Bold"
+                                   Foreground="{DynamicResource ThemeTextFg}" Margin="0,8,0,4"
+                                   TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding ExpectLine}" FontSize="11.5"
+                                   Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap"/>
+                        <TextBlock Text="{Binding RuleLine}" FontSize="11.5" Margin="0,2,0,0"
+                                   Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap"/>
 
-                    <!-- 主操作：启动/暂停 + 引擎提示 -->
-                    <Grid Margin="0,12,0,0">
-                        <Button Command="{Binding StartPauseCommand}" Content="{Binding StartPauseText}"
-                                Style="{DynamicResource FreshPrimaryButton}" FontSize="13" Padding="22,8" Cursor="Hand"
-                                HorizontalAlignment="Left"/>
-                        <TextBlock Text="{Binding EngineNote}" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"
-                                   VerticalAlignment="Center" HorizontalAlignment="Right" TextWrapping="Wrap" MaxWidth="180"/>
-                    </Grid>
-                </StackPanel>
-            </Border>
+                        <!-- 主操作 + 引擎提示 -->
+                        <Grid Margin="0,12,0,0">
+                            <Button Command="{Binding StartPauseCommand}" Content="{Binding StartPauseText}"
+                                    Style="{StaticResource AiBtnPrimary}" HorizontalAlignment="Left"/>
+                            <TextBlock Text="{Binding EngineNote}" FontSize="10.5"
+                                       Foreground="{DynamicResource ThemeTextMuted}"
+                                       VerticalAlignment="Center" HorizontalAlignment="Right"
+                                       TextTrimming="CharacterEllipsis" MaxWidth="170"/>
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
-            <!-- NG 告警卡（左红条 rail；NG 态可见） -->
-            <Border Grid.Row="1" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Padding="16,14" Margin="0,12,0,0"
-                    BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1"
-                    Visibility="{Binding HasNg, Converter={StaticResource BoolToVis}}">
-                <Grid>
-                    <Border Width="4" CornerRadius="2" Background="{DynamicResource ThemeNg}" HorizontalAlignment="Left" Margin="-9,0,0,0"/>
+                <!-- NG 告警卡（红描边；NG 态可见） -->
+                <Border Grid.Row="1" Style="{StaticResource AiCard}" BorderBrush="{DynamicResource ThemeNg}"
+                        Padding="14,12,14,12" Margin="0,12,0,0"
+                        Visibility="{Binding HasNg, Converter={StaticResource BoolToVis}}">
                     <StackPanel>
-                        <TextBlock Text="工位判定 NG" FontSize="14" FontWeight="Bold" Foreground="{DynamicResource ThemeNg}"/>
-                        <TextBlock Text="{Binding NgDetail}" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"
-                                   Margin="0,5,0,0" TextWrapping="Wrap"/>
-                        <StackPanel Orientation="Horizontal" Margin="0,10,0,0">
-                            <Button Content="NG 详情…" Style="{DynamicResource FreshPrimaryButton}" FontSize="12" Padding="14,6" Cursor="Hand"
+                        <Grid>
+                            <StackPanel Orientation="Horizontal">
+                                <TextBlock Text="工位判定 NG" FontSize="12.5" FontWeight="Bold"
+                                           Foreground="{DynamicResource ThemeNg}" VerticalAlignment="Center"/>
+                                <ContentControl Style="{StaticResource AiChipWarn}" Content="声光报警已触发"
+                                                MinHeight="18" Margin="8,0,0,0"/>
+                            </StackPanel>
+                            <TextBlock Text="连续 3 次将通知班组长" FontSize="10.5"
+                                       Foreground="{DynamicResource ThemeTextMuted}"
+                                       HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                        </Grid>
+                        <TextBlock Text="{Binding NgDetail}" FontSize="11.5" Margin="0,6,0,8"
+                                   Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap"/>
+                        <StackPanel Orientation="Horizontal">
+                            <Button Content="NG 详情…" Style="{StaticResource AiBtnPrimarySm}"
                                     Click="NgDetail_Click"/>
-                            <TextBlock Text="连续 NG 3 次将通知班组长" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"
-                                       VerticalAlignment="Center" Margin="10,0,0,0"/>
+                            <Button Content="重检本步" Command="{Binding RecheckCommand}"
+                                    Style="{StaticResource AiBtnSecondarySm}" Margin="8,0,0,0"/>
                         </StackPanel>
                     </StackPanel>
-                </Grid>
-            </Border>
+                </Border>
 
-            <!-- 工步序列卡 -->
-            <Border Grid.Row="2" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Margin="0,12,0,0"
-                    BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="4,4,4,8">
-                <StackPanel>
-                    <TextBlock Text="工步序列" FontSize="12" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}" Margin="12,10,0,6"/>
-                    <ItemsControl ItemsSource="{Binding Steps}">
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border Padding="14,5" Background="Transparent">
-                                    <Border.Style>
-                                        <Style TargetType="Border">
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding State}" Value="current">
-                                                    <Setter Property="Background" Value="{DynamicResource ThemePrimaryDim}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </Border.Style>
-                                    <Grid>
-                                        <Grid.ColumnDefinitions>
-                                            <ColumnDefinition Width="26"/>
-                                            <ColumnDefinition Width="*"/>
-                                            <ColumnDefinition Width="Auto"/>
-                                        </Grid.ColumnDefinitions>
-                                        <TextBlock Grid.Column="0" Text="{Binding StateGlyph}" FontSize="12" FontWeight="Bold" TextAlignment="Center">
-                                            <TextBlock.Style>
-                                                <Style TargetType="TextBlock">
-                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
-                                                    <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding State}" Value="done">
-                                                            <Setter Property="Foreground" Value="{DynamicResource ThemeOk}"/>
-                                                        </DataTrigger>
-                                                        <DataTrigger Binding="{Binding State}" Value="current">
-                                                            <Setter Property="Foreground" Value="{DynamicResource ThemePrimary}"/>
-                                                        </DataTrigger>
-                                                    </Style.Triggers>
-                                                </Style>
-                                            </TextBlock.Style>
-                                        </TextBlock>
-                                        <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12" Foreground="{DynamicResource ThemeTextFg}"/>
-                                        <TextBlock Grid.Column="2" Text="{Binding RoiId}" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
-                    </ItemsControl>
-                </StackPanel>
-            </Border>
-
-            <!-- 运行日志面板（2026-11-22 用户反馈新增：状态行收拢进面板头部，不再单独一行；
-                 面板占右栏剩余全部空间，实时日志流 = AppLog 双出口 UI 面） -->
-            <Border Grid.Row="3" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" Margin="0,12,0,0"
-                    BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1">
-                <Grid>
-                    <Grid.RowDefinitions>
-                        <RowDefinition Height="Auto"/>
-                        <RowDefinition Height="*"/>
-                    </Grid.RowDefinitions>
-
-                    <!-- 头部：标题 + 状态（收拢，省略号截断） + OK/NG 计数 -->
-                    <Border Grid.Row="0" Padding="14,10,14,8" BorderBrush="{DynamicResource ThemeBorder}"
-                            BorderThickness="0,0,0,1">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto"/>
-                                <ColumnDefinition Width="*"/>
-                                <ColumnDefinition Width="Auto"/>
-                            </Grid.ColumnDefinitions>
-                            <TextBlock Text="运行日志" FontSize="12" FontWeight="Bold" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource ThemeTextFg}"/>
-                            <TextBlock Grid.Column="1" FontSize="11" Margin="12,0,8,0" VerticalAlignment="Center"
-                                       Foreground="{DynamicResource ThemeTextMuted}" TextTrimming="CharacterEllipsis">
-                                <Run Text="状态："/><Run Text="{Binding StatusLine, Mode=OneWay}"/>
-                            </TextBlock>
-                            <TextBlock Grid.Column="2" FontSize="11" VerticalAlignment="Center">
-                                <Run Text="OK " Foreground="{DynamicResource ThemeTextMuted}"/><Run Text="{Binding OkCount, Mode=OneWay}" Foreground="{DynamicResource ThemeOk}" FontWeight="Bold"/>
-                                <Run Text=" / NG " Foreground="{DynamicResource ThemeTextMuted}"/><Run Text="{Binding NgCount, Mode=OneWay}" Foreground="{DynamicResource ThemeNg}" FontWeight="Bold"/>
-                            </TextBlock>
+                <!-- 工步序列卡 -->
+                <Border Grid.Row="2" Style="{StaticResource AiCard}" Margin="0,12,0,0" Padding="16,14,16,14">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,8">
+                            <TextBlock Text="工步序列" Style="{StaticResource AiCardTitle}"/>
+                            <TextBlock Text="{Binding Steps.Count, StringFormat=共 {0} 步}" Style="{StaticResource AiCardSub}"
+                                       HorizontalAlignment="Right"/>
                         </Grid>
-                    </Border>
+                        <ItemsControl ItemsSource="{Binding Steps}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Padding="8,4" CornerRadius="8" Background="Transparent">
+                                        <Border.Style>
+                                            <Style TargetType="Border">
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding State}" Value="current">
+                                                        <Setter Property="Background" Value="{DynamicResource ThemePrimaryFill}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </Border.Style>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="18"/>
+                                                <ColumnDefinition Width="*"/>
+                                                <ColumnDefinition Width="Auto"/>
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Grid.Column="0" Text="{Binding StateGlyph}" FontSize="11"
+                                                       FontWeight="Bold" TextAlignment="Center" VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="done">
+                                                                <Setter Property="Foreground" Value="{DynamicResource ThemeOk}"/>
+                                                            </DataTrigger>
+                                                            <DataTrigger Binding="{Binding State}" Value="current">
+                                                                <Setter Property="Foreground" Value="{DynamicResource ThemePrimary}"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12"
+                                                       Foreground="{DynamicResource ThemeTextFg}" Margin="8,0,0,0"
+                                                       VerticalAlignment="Center">
+                                                <TextBlock.Style>
+                                                    <Style TargetType="TextBlock">
+                                                        <Style.Triggers>
+                                                            <DataTrigger Binding="{Binding State}" Value="current">
+                                                                <Setter Property="FontWeight" Value="SemiBold"/>
+                                                            </DataTrigger>
+                                                        </Style.Triggers>
+                                                    </Style>
+                                                </TextBlock.Style>
+                                            </TextBlock>
+                                            <TextBlock Grid.Column="2" Text="{Binding RoiId}" FontSize="11"
+                                                       Foreground="{DynamicResource ThemeTextMuted}"
+                                                       VerticalAlignment="Center"/>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
 
-                    <!-- 日志流：时间 + 级别着色 + 消息；自动滚到底（code-behind glue） -->
-                    <ListBox Grid.Row="1" x:Name="LogList" ItemsSource="{Binding Logs}"
-                             Background="Transparent" BorderThickness="0"
-                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
-                             ScrollViewer.VerticalScrollBarVisibility="Auto"
-                             VirtualizingPanel.ScrollUnit="Pixel">
-                        <ListBox.ItemContainerStyle>
-                            <Style TargetType="ListBoxItem">
-                                <Setter Property="Background" Value="Transparent"/>
-                                <Setter Property="Padding" Value="0"/>
-                                <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
-                                <Setter Property="Template">
-                                    <Setter.Value>
-                                        <ControlTemplate TargetType="ListBoxItem">
-                                            <ContentPresenter Margin="10,2"/>
-                                        </ControlTemplate>
-                                    </Setter.Value>
-                                </Setter>
-                            </Style>
-                        </ListBox.ItemContainerStyle>
-                        <ListBox.ItemTemplate>
-                            <DataTemplate>
-                                <TextBlock FontSize="11" TextWrapping="Wrap" LineHeight="16">
-                                    <TextBlock.Style>
-                                        <Style TargetType="TextBlock">
-                                            <Setter Property="Foreground" Value="{DynamicResource ThemeTextFg}"/>
-                                            <Style.Triggers>
-                                                <DataTrigger Binding="{Binding Level}" Value="WARN">
-                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeWarn}"/>
-                                                </DataTrigger>
-                                                <DataTrigger Binding="{Binding Level}" Value="ERROR">
-                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeNg}"/>
-                                                </DataTrigger>
-                                            </Style.Triggers>
-                                        </Style>
-                                    </TextBlock.Style>
-                                    <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                    <Run Text=" "/>
-                                    <Run Text="{Binding Msg, Mode=OneWay}"/>
+                <!-- 运行日志卡（占满右列剩余高度） -->
+                <Border Grid.Row="3" Style="{StaticResource AiCard}" Margin="0,12,0,0">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto"/>
+                            <RowDefinition Height="*"/>
+                        </Grid.RowDefinitions>
+
+                        <Border Grid.Row="0" Padding="16,12,16,10" BorderBrush="{DynamicResource ThemeBorder}"
+                                BorderThickness="0,0,0,1">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                    <ColumnDefinition Width="Auto"/>
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="运行日志" Style="{StaticResource AiCardTitle}"/>
+                                <TextBlock Grid.Column="1" FontSize="10.5" Margin="10,0,8,0"
+                                           Foreground="{DynamicResource ThemeTextMuted}"
+                                           VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+                                    <Run Text="状态："/><Run Text="{Binding StatusLine, Mode=OneWay}"/>
                                 </TextBlock>
-                            </DataTemplate>
-                        </ListBox.ItemTemplate>
-                    </ListBox>
-                </Grid>
-            </Border>
+                                <ContentControl Grid.Column="2" MinHeight="20" FontSize="10.5"
+                                                Style="{StaticResource AiChipOk}">
+                                    <TextBlock>
+                                        <Run Text="OK "/><Run Text="{Binding OkCount, Mode=OneWay}"/>
+                                        <Run Text=" / NG "/><Run Text="{Binding NgCount, Mode=OneWay}"/>
+                                    </TextBlock>
+                                </ContentControl>
+                            </Grid>
+                        </Border>
+
+                        <!-- 日志流：等宽小字、级别着色、自动滚到底（code-behind glue） -->
+                        <ListBox Grid.Row="1" x:Name="LogList" ItemsSource="{Binding Logs}"
+                                 Background="Transparent" BorderThickness="0"
+                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                 VirtualizingPanel.ScrollUnit="Pixel">
+                            <ListBox.ItemContainerStyle>
+                                <Style TargetType="ListBoxItem">
+                                    <Setter Property="Background" Value="Transparent"/>
+                                    <Setter Property="Padding" Value="0"/>
+                                    <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                                    <Setter Property="Template">
+                                        <Setter.Value>
+                                            <ControlTemplate TargetType="ListBoxItem">
+                                                <ContentPresenter Margin="14,2"/>
+                                            </ControlTemplate>
+                                        </Setter.Value>
+                                    </Setter>
+                                </Style>
+                            </ListBox.ItemContainerStyle>
+                            <ListBox.ItemTemplate>
+                                <DataTemplate>
+                                    <TextBlock FontSize="10.5" TextWrapping="Wrap" LineHeight="17"
+                                               FontFamily="Consolas, Microsoft YaHei UI">
+                                        <TextBlock.Style>
+                                            <Style TargetType="TextBlock">
+                                                <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+                                                <Style.Triggers>
+                                                    <DataTrigger Binding="{Binding Level}" Value="WARN">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeWarn}"/>
+                                                    </DataTrigger>
+                                                    <DataTrigger Binding="{Binding Level}" Value="ERROR">
+                                                        <Setter Property="Foreground" Value="{DynamicResource ThemeNg}"/>
+                                                    </DataTrigger>
+                                                </Style.Triggers>
+                                            </Style>
+                                        </TextBlock.Style>
+                                        <Run Text="{Binding Time, Mode=OneWay}" Foreground="{DynamicResource ThemeTextFg}"/>
+                                        <Run Text=" "/>
+                                        <Run Text="{Binding Msg, Mode=OneWay}"/>
+                                    </TextBlock>
+                                </DataTemplate>
+                            </ListBox.ItemTemplate>
+                        </ListBox>
+                    </Grid>
+                </Border>
+            </Grid>
         </Grid>
+
+        <!-- ===== 底部演示控制条（Mock 三件套驱动 · 独立整宽卡） ===== -->
+        <Border Grid.Row="1" Style="{StaticResource AiCard}" Padding="14,10" Margin="0,14,0,0">
+            <Grid>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="演示控制" FontSize="11" FontWeight="SemiBold"
+                               Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"
+                               Margin="2,0,10,0"/>
+                    <ComboBox ItemsSource="{Binding DemoParts}" SelectedItem="{Binding SelectedPart}"
+                              Width="150" MinHeight="30" Style="{StaticResource AiCombo}" VerticalAlignment="Center"/>
+                    <Button Content="放上一个" Command="{Binding DemoPlaceCommand}"
+                            Style="{StaticResource AiBtnSecondarySm}" Margin="10,0,0,0"/>
+                    <Button Content="拿走一个（NG 模拟）" Command="{Binding DemoRemoveCommand}"
+                            Style="{StaticResource AiBtnDangerGhostSm}" Margin="8,0,0,0"/>
+                    <Button Content="一键摆齐" Command="{Binding DemoPlaceAllCommand}"
+                            Style="{StaticResource AiBtnSecondarySm}" Margin="8,0,0,0"/>
+                    <Button Content="重检本步" Command="{Binding RecheckCommand}"
+                            Style="{StaticResource AiBtnPrimarySm}" Margin="8,0,0,0"/>
+                </StackPanel>
+                <TextBlock Text="Mock 三件套驱动 · 真机接入后本条隐藏" FontSize="10.5"
+                           Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Right"
+                           VerticalAlignment="Center"/>
+            </Grid>
+        </Border>
     </Grid>
 </UserControl>

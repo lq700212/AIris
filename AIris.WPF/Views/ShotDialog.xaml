@@ -1,17 +1,19 @@
 <!--
   存档详情弹窗（设计稿 dlg-shot）：存档截图 + 判定数据 + 完整追溯信息。
+
+  2026-11-23 整改：按钮 FreshButton（方角 4）→ AiBtn* 药丸 999；根底 → ThemePanelBg
+  （深色模式跟随宿主主题，不再被库浅色键板钉死白底）。
 -->
 <ui:ChromeDialogWindow x:Class="AIris.WPF.Views.ShotDialog"
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
-                       Title="存档详情" Width="680" SizeToContent="Height" Resizeable="False" ShowMinButton="False" ShowMaxButton="False">
-    <Border Background="{DynamicResource Brush.Fresh.CardBg}" Padding="18,14,18,16">
+                       Title="存档详情" Width="680" SizeToContent="Height" UseLayoutRounding="True" Resizeable="False" ShowMinButton="False" ShowMaxButton="False">
+    <Border Background="{DynamicResource ThemePanelBg}" Padding="18,14,18,16">
         <StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="存档详情" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                <TextBlock x:Name="Badge" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,1,0,0"/>
-            </StackPanel>
+            <!-- 设计稿 .mh 标题条已显示「存档详情 · SN」，内容区不再重复标题，
+                 只留 SN · 时间元信息行（2026-11-23 目检：旧版两处标题冗余） -->
+            <TextBlock x:Name="Badge" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
             <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="300"/>
@@ -22,18 +24,23 @@
                     <Image x:Name="ShotImage" Stretch="Uniform"/>
                 </Border>
                 <StackPanel Grid.Column="2" TextElement.FontSize="12">
-                    <TextBlock x:Name="VerdictText" FontWeight="Bold"/>
-                    <TextBlock x:Name="StepText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,8,0,0"/>
-                    <TextBlock x:Name="RoiText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
-                    <TextBlock x:Name="RuleText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
-                    <TextBlock x:Name="EngineText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
-                    <TextBlock x:Name="FileText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0"/>
+                    <!-- 全部信息行 TextWrapping=Wrap：规则快照/存档文件名都长，不换行会横向溢出弹窗
+                         （2026-11-23 深色目检实踩：存档文件名被裁在边框外） -->
+                    <TextBlock x:Name="VerdictText" FontWeight="Bold" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="StepText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,8,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="RoiText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="RuleText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="EngineText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
+                    <TextBlock x:Name="FileText" Foreground="{DynamicResource ThemeTextMuted}" Margin="0,6,0,0" TextWrapping="Wrap"/>
                 </StackPanel>
             </Grid>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-                <Button Content="关闭" Style="{DynamicResource FreshButton}" FontSize="12.5" Padding="16,7" Margin="0,0,10,0" Cursor="Hand" Click="Close_Click"/>
-                <Button Content="导出此条" Style="{DynamicResource FreshPrimaryButton}" FontSize="12.5" Padding="16,7" Cursor="Hand" Click="Export_Click"/>
-            </StackPanel>
+            <!-- 设计稿 .mf：右对齐 + 上方 1px 分隔线 + 12px 上内距 -->
+            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,12,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="关闭" Style="{StaticResource AiBtnSecondary}" Margin="0,0,10,0" Click="Close_Click"/>
+                    <Button Content="导出此条" Style="{StaticResource AiBtnPrimary}" Click="Export_Click"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Border>
 </ui:ChromeDialogWindow>

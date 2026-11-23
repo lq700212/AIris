@@ -24,6 +24,16 @@ namespace AIris.WPF.ViewModels
         public string LicenseNote { get { return Card.LicenseNote; } }
         public bool IsMock { get { return Card.IsMock; } }
 
+        /// <summary>许可证胶囊语义档：Mock=Warn（演示）/ LocateAnything=Ng（仅研究不可商用）/ Qwen=Ok（Apache 商用）。</summary>
+        public string LicenseTag
+        {
+            get
+            {
+                if (Card.IsMock) return "Warn";
+                return string.Equals(Card.Id, "locateanything-http", StringComparison.OrdinalIgnoreCase) ? "Ng" : "Ok";
+            }
+        }
+
         private bool _active;
         /// <summary>是否当前引擎（主色描边焦点卡 + "当前引擎"胶囊）。</summary>
         public bool Active
@@ -174,6 +184,14 @@ namespace AIris.WPF.ViewModels
         /// <summary>引擎态一句话（"Mock 演示 · 已就绪"/"HTTP 桩 · 未接入，检测回落 Mock"）。</summary>
         public string EngineState { get { return _engineState; } private set { SetProperty(ref _engineState, value); } }
 
+        private string _testState = "idle";
+        /// <summary>测试连接就地反馈状态：idle / ok / fail（XAML 胶囊颜色与文案由它驱动）。</summary>
+        public string TestState { get { return _testState; } private set { SetProperty(ref _testState, value); } }
+
+        private string _testText = "尚未测试";
+        /// <summary>测试连接结果文本（在线=耗时；不可达=原因，不用翻日志）。</summary>
+        public string TestText { get { return _testText; } private set { SetProperty(ref _testText, value); } }
+
         private string _activeEngineName = "";
         public string ActiveEngineName { get { return _activeEngineName; } private set { SetProperty(ref _activeEngineName, value); } }
 
@@ -256,7 +274,7 @@ namespace AIris.WPF.ViewModels
             RefreshState();
         }
 
-        /// <summary>测试连接（用表单当前值——未保存——探活；报结果与耗时）。</summary>
+        /// <summary>测试连接（用表单当前值——未保存——探活；结果就地回显在按钮左侧胶囊，不用翻日志）。</summary>
         private void TestConnection()
         {
             var ep = new Kaleidoscope.Infer.InferEndpoint
@@ -272,9 +290,23 @@ namespace AIris.WPF.ViewModels
             {
                 var r = client.ProbeAsync(ep, System.Threading.CancellationToken.None).GetAwaiter().GetResult();
                 if (r.Ok)
+                {
+                    TestState = "ok";
+                    TestText = "探活在线 · " + r.LatencyMs + " ms";
                     ServiceHub.Host.Info("连接成功：" + ep.BaseUrl + "\r\n响应 " + r.LatencyMs + " ms（协议 " + Protocol + "）", "测试连接");
+                }
                 else
+                {
+                    TestState = "fail";
+                    TestText = "不可达 · " + r.Error;
                     ServiceHub.Host.Info("连接失败：" + r.Error + "\r\n检查服务地址/协议是否匹配部署形态。", "测试连接");
+                }
+            }
+            catch (Exception ex)
+            {
+                TestState = "fail";
+                TestText = "不可达 · " + ex.Message;
+                ServiceHub.Host.Info("连接失败：" + ex.Message, "测试连接");
             }
             finally { client.Dispose(); }
         }

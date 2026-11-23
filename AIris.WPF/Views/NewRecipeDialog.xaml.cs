@@ -107,7 +107,35 @@ namespace AIris.WPF.Views
             Step2Panel.Visibility = n == 2 ? Visibility.Visible : Visibility.Collapsed;
             PrevBtn.Visibility = n == 2 ? Visibility.Visible : Visibility.Collapsed;
             NextBtn.Content = n == 1 ? "下一步" : "创建配方";
-            StepBadge.Text = n == 1 ? "第 1 步 · 描述产品" : "第 2 步 · 确认工步草稿";
+            UpdateStepIndicator(n);
+        }
+
+        /// <summary>
+        /// 步骤指示器视觉切换（设计稿 .steps 口径）：当前步 = 橙底白字 + 文字加粗，
+        /// 未到步 = 面板底 + 灰字。颜色走主题键，深浅色自动跟随。
+        /// </summary>
+        private void UpdateStepIndicator(int n)
+        {
+            var prim = (System.Windows.Media.Brush)FindResource("ThemePrimaryGrad");
+            var primBorder = (System.Windows.Media.Brush)FindResource("ThemePrimary");
+            var panel2 = (System.Windows.Media.Brush)FindResource("ThemePanel2Bg");
+            var border = (System.Windows.Media.Brush)FindResource("ThemeBorder");
+            var fg = (System.Windows.Media.Brush)FindResource("ThemeTextFg");
+            var muted = (System.Windows.Media.Brush)FindResource("ThemeTextMuted");
+            var onPri = (System.Windows.Media.Brush)FindResource("ThemeOnPrimary");
+
+            bool first = n == 1;
+            StepDot1.Background = first ? prim : panel2;
+            StepDot1.BorderBrush = first ? primBorder : border;
+            StepNum1.Foreground = first ? onPri : muted;
+            StepLbl1.Foreground = first ? fg : muted;
+            StepLbl1.FontWeight = first ? FontWeights.SemiBold : FontWeights.Normal;
+
+            StepDot2.Background = first ? panel2 : prim;
+            StepDot2.BorderBrush = first ? border : primBorder;
+            StepNum2.Foreground = first ? muted : onPri;
+            StepLbl2.Foreground = first ? muted : fg;
+            StepLbl2.FontWeight = first ? FontWeights.Normal : FontWeights.SemiBold;
         }
     }
 }

@@ -12,11 +12,13 @@ using AIris.Core.Model;
 
 namespace AIris.WPF.ViewModels
 {
-    /// <summary>工步序列行（监控台序列卡）。</summary>
+    /// <summary>工步序列行（监控台序列卡 + 检测框三态归属判定）。</summary>
     public class StepRowVm : ViewModelBase
     {
         public int Index { get; set; }
         public string Name { get; set; } = "";
+        /// <summary>预期零件（检测框三态着色按此与框 Label 匹配归属工步）。</summary>
+        public string ExpectedPart { get; set; } = "";
         public string RoiId { get; set; } = "";
         /// <summary>done / current / pending</summary>
         public string State { get; set; } = "pending";
@@ -179,12 +181,14 @@ namespace AIris.WPF.ViewModels
         private void OnFrame(object s, FrameEventArgs e)
         {
             var img = Imaging.ToBitmapSource(e.Image);
-            var empty = e.IsEmptyScene;   // Mock 空场（透明帧不算"有画面"）：UI 回无帧空态，扫描动效恢复
             var dets = e.Detections ?? new List<Detection>();
             var info = e.InfoLine;
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                FrameImage = empty ? null : (img ?? FrameImage);
+                // 空场也出帧（2026-11-23 整改）：Mock 空场是透明帧，叠在舞台网格上就是
+                // "空台面"的真实观感；旧版空场清帧会回"等待画面…"，让用户误以为相机断流
+                // （实际相机在线、检测也在跑）。IdleText 只留给真正无帧的状态。
+                FrameImage = img ?? FrameImage;
                 CameraInfo = info;
                 Boxes.Clear();
                 foreach (var d in dets) Boxes.Add(d);
@@ -263,6 +267,7 @@ namespace AIris.WPF.ViewModels
                 {
                     Index = i + 1,
                     Name = recipe.Steps[i].Name,
+                    ExpectedPart = recipe.Steps[i].ExpectedPart ?? "",
                     RoiId = string.IsNullOrEmpty(recipe.Steps[i].RoiId) ? "全画面" : recipe.Steps[i].RoiId,
                     State = (i + 1) < cur ? "done" : (i + 1) == cur ? "current" : "pending"
                 });

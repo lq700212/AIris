@@ -28,5 +28,12 @@ namespace AIris.WPF.ViewModels
 
         /// <summary>页面进入时回调（切页刷新数据，由 MainViewModel.Go 触发）。</summary>
         public virtual void OnEnter() { }
+
+        /// <summary>
+        /// 页面离开时回调（对称收尾：停预览/退订事件等）。
+        /// 默认空实现；MainViewModel 切页时先调旧页 OnLeave 再调新页 OnEnter，
+        /// 保证"进编辑器开预览、离开即停"这类成对资源不悬空（2026-11-23 新增）。
+        /// </summary>
+        public virtual void OnLeave() { }
     }
 }

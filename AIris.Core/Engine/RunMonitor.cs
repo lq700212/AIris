@@ -490,7 +490,7 @@ namespace AIris.Core.Engine
             {
                 Bitmap shot = null;
                 var lf = _liveFrame;
-                if (lf != null && lf.Image != null) shot = (Bitmap)lf.Image.Clone();
+                if (lf != null && lf.Image != null) shot = FlattenForArchive(lf.Image);
                 if (shot == null) shot = ComposeShotFromDetections();
                 shotFile = _audit.SaveShot(shot);
                 if (shot != null) shot.Dispose();
@@ -536,6 +536,31 @@ namespace AIris.Core.Engine
                     foreach (var d in _lastDetections)
                         g.DrawRectangle(Pens.OrangeRed, d.X1 * 640 / 1000, d.Y1 * 480 / 1000,
                             (d.X2 - d.X1) * 640 / 1000, (d.Y2 - d.Y1) * 480 / 1000);
+            }
+            return bmp;
+        }
+
+        /// <summary>
+        /// 存档截图专用：把活帧合成到不透明"台面"上再落盘。
+        /// 为什么必须 flatten（2026-11-23 深色目检实踩）：
+        /// Mock 帧是 32bppArgb 透明底（V0.1.5 口径：台面网格/扫描是 UI 舞台层，不随帧走），
+        /// 直接存 PNG 的话透明区域在查看器里是透明/黑，弹窗里就成"一片空白"——
+        /// 尤其"缺件 NG"记录画面上本来没零件，截图完全没有追溯价值。
+        /// 合成台面（设计稿 --frame-bg #E8EDF5 + 64px 网格，与监控舞台同观感）后，
+        /// 缺件 NG 也能一眼看出"台面是空的"。真实相机帧不透明，会整幅覆盖台面，无副作用。
+        /// </summary>
+        private static Bitmap FlattenForArchive(Bitmap frame)
+        {
+            var bmp = new Bitmap(frame.Width, frame.Height);
+            using (var g = Graphics.FromImage(bmp))
+            {
+                g.Clear(Color.FromArgb(232, 237, 245));                       // 设计稿 --frame-bg
+                using (var pen = new Pen(Color.FromArgb(26, 100, 116, 139), 1f))   // 细网格线（淡）
+                {
+                    for (int x = 0; x < frame.Width; x += 64) g.DrawLine(pen, x, 0, x, frame.Height);
+                    for (int y = 0; y < frame.Height; y += 64) g.DrawLine(pen, 0, y, frame.Width, y);
+                }
+                g.DrawImageUnscaled(frame, 0, 0);   // 原尺寸叠帧：透明处透出台面，零件保留原像素
             }
             return bmp;
         }

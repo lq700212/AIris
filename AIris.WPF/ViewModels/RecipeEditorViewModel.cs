@@ -59,9 +59,8 @@ namespace AIris.WPF.ViewModels
         public bool Selected
         {
             get { return _selected; }
-            set { SetProperty(ref _selected, value); OnPropertyChanged(nameof(BgKey)); }
+            set { SetProperty(ref _selected, value); }
         }
-        public string BgKey { get { return _selected ? "ThemePrimaryDim" : "Transparent"; } }
     }
 
     /// <summary>
@@ -283,14 +282,16 @@ namespace AIris.WPF.ViewModels
             private set { SetProperty(ref _frameImage, value); }
         }
 
-        /// <summary>预览帧到达（相机线程 → Dispatcher 收口转 BitmapSource；口径同 MonitorViewModel.OnFrame）。</summary>
+        /// <summary>预览帧到达（相机线程 → Dispatcher 收口转 BitmapSource；口径同 MonitorViewModel.OnFrame）。
+        /// 2026-11-23 整改：空场不再清帧——Mock 的"空场"是透明帧（台面网格/扫描在舞台层），
+        /// 叠出来就是"空台面"；旧版清帧回"等待画面…"会让人误判相机断流。
+        /// IdleText 只保留给真正无帧（相机未启动/断流）的状态。</summary>
         private void OnPreviewFrame(object s, AIris.Core.Engine.FrameEventArgs e)
         {
             var img = Imaging.ToBitmapSource(e.Image);
-            var empty = e.IsEmptyScene;   // Mock 空场透传：UI 回无帧空态（口径与监控台一致）
             System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
-                FrameImage = empty ? null : (img ?? FrameImage);
+                FrameImage = img ?? FrameImage;
             }));
         }
 
@@ -318,6 +319,18 @@ namespace AIris.WPF.ViewModels
             }
 
             ReloadSteps();
+
+            // 进入编辑器即自动出画面（2026-11-23 整改）：设计稿编辑器画布直接显示实际取像，
+            // 旧版要用户先点「启动取像」才出帧，首屏一片网格 + 中央提示文字，标画入口像坏了。
+            // StartPreview 内部已判 _running：监控检测进行中则复用 DetectLoop 同源帧，不双开相机。
+            PreviewOn = true;
+        }
+
+        public override void OnLeave()
+        {
+            // 离开编辑器即停预览取像：不留空转相机线程与订阅（回到编辑器 OnEnter 会重新自动开）。
+            // StopPreview 内部已判 _running——监控检测在跑时不会停相机，只退出预览态。
+            PreviewOn = false;
         }
 
         private void ReloadSteps()
@@ -353,6 +366,14 @@ namespace AIris.WPF.ViewModels
             OnPropertyChanged(nameof(EditStableFrames));
             OnPropertyChanged(nameof(EditExpectedCountText));
             OnPropertyChanged(nameof(EditDualChannel));
+
+            // 默认选中：优先本步判定区域，否则第一个 ROI —— 右侧「选中 ROI」数值栏首屏即有值，
+            // 画布上选中框显示四角手柄（设计稿默认选中 ROI-A 的口径，2026-11-23 目检发现旧版首屏
+            // 一直是"未选择"空态，用户得先点一下框才看得到数值）
+            RoiVm prefer = null;
+            if (!string.IsNullOrEmpty(_editRoiId))
+                prefer = Rois.FirstOrDefault(r => string.Equals(r.Id, _editRoiId, StringComparison.OrdinalIgnoreCase));
+            SelectedRoi = prefer ?? Rois.FirstOrDefault();
         }
 
         /// <summary>编辑属性回写选中步（空选忽略）。</summary>

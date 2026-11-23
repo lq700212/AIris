@@ -18,7 +18,7 @@
     <SolidColorBrush x:Key="ThemeOk" Color="#FF10B981"/>
     <SolidColorBrush x:Key="ThemeWarn" Color="#FFF59E0B"/>
     <SolidColorBrush x:Key="ThemeNg" Color="#FFEF4444"/>
-    <LinearGradientBrush x:Key="ThemeTitleGrad" StartPoint="0,0" EndPoint="1,1">
+    <LinearGradientBrush x:Key="ThemeTitleGrad" StartPoint="0,0" EndPoint="1,0">
         <GradientStop Color="#FF7C2D12" Offset="0"/>
         <GradientStop Color="#FF831843" Offset="1"/>
     </LinearGradientBrush>
@@ -28,9 +28,21 @@
     </LinearGradientBrush>
     <SolidColorBrush x:Key="ThemePrimaryDim" Color="#33F97316"/>
     <SolidColorBrush x:Key="ThemePrimaryFill" Color="#22F97316"/>
+    <!-- 组件层补充键（与 ThemeLight.xaml 同键换值，主题键集一致性红线） -->
+    <SolidColorBrush x:Key="ThemePrimaryHover" Color="#FFFB8C3C"/>
+    <SolidColorBrush x:Key="ThemePrimaryPressed" Color="#FFD95F16"/>
+    <SolidColorBrush x:Key="ThemeOnPrimary" Color="#FFFFFFFF"/>
+    <!-- 当前引擎卡描边（设计稿 rgba(249,115,22,.5)：主色 50% 不喧宾夺主） -->
+    <SolidColorBrush x:Key="ThemePrimaryBorder" Color="#80F97316"/>
+    <LinearGradientBrush x:Key="ThemePrimaryGrad" StartPoint="0,0" EndPoint="1,0">
+        <GradientStop Color="#FFF97316" Offset="0"/>
+        <GradientStop Color="#FFEC4899" Offset="1"/>
+    </LinearGradientBrush>
     <SolidColorBrush x:Key="ThemeOkDim" Color="#3310B981"/>
     <SolidColorBrush x:Key="ThemeWarnDim" Color="#33F59E0B"/>
     <SolidColorBrush x:Key="ThemeNgDim" Color="#33EF4444"/>
+    <!-- 舞台脚注半透明底（与 ThemeLight 同键换值：深色面板 #271731 78%） -->
+    <SolidColorBrush x:Key="ThemeStageFootBg" Color="#C7271731"/>
     <CornerRadius x:Key="ThemeCardRadius">16</CornerRadius>
     <CornerRadius x:Key="ThemeButtonRadius">99</CornerRadius>
 

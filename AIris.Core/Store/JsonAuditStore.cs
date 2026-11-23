@@ -63,11 +63,15 @@ namespace AIris.Core.Store
 
                 foreach (var f in files)
                 {
-                    foreach (var line in File.ReadAllLines(f, System.Text.Encoding.UTF8))
+                    // 行尾 → 行首倒读：最新记录先入结果（追溯习惯"最新在上"），
+                    // 且 maxRows 截断截掉的是最旧记录而不是最新记录
+                    //（2026-11-23 实测旧实现正序读+达上限 return，500 条满后天当天新记录永远查不到）。
+                    var lines = File.ReadAllLines(f, System.Text.Encoding.UTF8);
+                    for (int i = lines.Length - 1; i >= 0; i--)
                     {
-                        if (string.IsNullOrWhiteSpace(line)) continue;
+                        if (string.IsNullOrWhiteSpace(lines[i])) continue;
                         AuditRecord r;
-                        try { r = JsonConvert.DeserializeObject<AuditRecord>(line); } catch { continue; }
+                        try { r = JsonConvert.DeserializeObject<AuditRecord>(lines[i]); } catch { continue; }
                         if (r == null) continue;
                         if (!string.IsNullOrEmpty(verdict) && verdict != "全部" && !string.Equals(r.Verdict, verdict, StringComparison.OrdinalIgnoreCase)) continue;
                         if (!string.IsNullOrEmpty(recipeName) && recipeName != "全部配方" && !string.Equals(r.RecipeName, recipeName, StringComparison.OrdinalIgnoreCase)) continue;

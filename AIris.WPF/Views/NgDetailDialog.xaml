@@ -5,13 +5,11 @@
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
-                       Title="NG 详情" Width="640" SizeToContent="Height" Resizeable="False" ShowMinButton="False" ShowMaxButton="False">
-    <Border Background="{DynamicResource Brush.Fresh.CardBg}" Padding="18,14,18,16">
+                       Title="NG 详情" Width="640" SizeToContent="Height" UseLayoutRounding="True" Resizeable="False" ShowMinButton="False" ShowMaxButton="False">
+    <Border Background="{DynamicResource ThemePanelBg}" Padding="18,14,18,16">
         <StackPanel>
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="NG 详情" FontSize="15" FontWeight="Bold" Foreground="{DynamicResource ThemeNg}"/>
-                <TextBlock x:Name="StepBadge" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,1,0,0"/>
-            </StackPanel>
+            <!-- 标题条已有「NG 详情」：内容区只留工步徽标，避免重复标题（2026-11-23 统一口径） -->
+            <TextBlock x:Name="StepBadge" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
             <Grid Margin="0,12,0,0">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="220"/>
@@ -30,10 +28,13 @@
             </Grid>
             <TextBlock Text="建议：补装后点「重检本步」，历史 NG 保留在同一追溯链" FontSize="11"
                        Foreground="{DynamicResource ThemeWarn}" Margin="0,12,0,0"/>
-            <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,14,0,0">
-                <Button Content="关闭" Style="{DynamicResource FreshButton}" FontSize="12.5" Padding="16,7" Margin="0,0,10,0" Cursor="Hand" Click="Close_Click"/>
-                <Button Content="重检本步" Style="{DynamicResource FreshPrimaryButton}" FontSize="12.5" Padding="16,7" Cursor="Hand" Click="Recheck_Click"/>
-            </StackPanel>
+            <!-- 设计稿 .mf：右对齐 + 上方 1px 分隔线 + 12px 上内距 -->
+            <Border BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="0,1,0,0" Margin="0,14,0,0" Padding="0,12,0,0">
+                <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
+                    <Button Content="关闭" Style="{StaticResource AiBtnSecondary}" Margin="0,0,10,0" Click="Close_Click"/>
+                    <Button Content="重检本步" Style="{StaticResource AiBtnPrimary}" Click="Recheck_Click"/>
+                </StackPanel>
+            </Border>
         </StackPanel>
     </Border>
 </ui:ChromeDialogWindow>

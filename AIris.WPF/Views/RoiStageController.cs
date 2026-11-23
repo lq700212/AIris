@@ -302,7 +302,7 @@ namespace AIris.WPF.Views
 
                 var label = new TextBlock
                 {
-                    Text = roi.Id,
+                    Text = string.IsNullOrEmpty(roi.Name) ? roi.Id : roi.Display,
                     FontSize = 10.5,
                     FontWeight = FontWeights.Bold,
                     Foreground = sel ? selBrush : dimBrush,

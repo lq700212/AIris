@@ -1,5 +1,4 @@
 using System.Windows;
-using System.Windows.Media;
 
 namespace AIris.WPF.Views
 {
@@ -9,11 +8,10 @@ namespace AIris.WPF.Views
         public ConfirmDialog(string title, string text, string confirmText, bool danger, bool hideCancel = false)
         {
             InitializeComponent();
-            TitleText.Text = title;
             BodyText.Text = text;
             ConfirmBtn.Content = confirmText;
-            Title = title;
-            if (danger) ConfirmBtn.Background = new SolidColorBrush(Color.FromRgb(0xCF, 0x43, 0x43));
+            Title = title;   // 标题只在标题条显示一处（内容区不再重复大标题）
+            if (danger) ConfirmBtn.Style = (Style)FindResource("AiBtnDanger");
             if (hideCancel) CancelBtn.Visibility = Visibility.Collapsed;
         }
 

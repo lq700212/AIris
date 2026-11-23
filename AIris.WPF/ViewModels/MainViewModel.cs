@@ -135,10 +135,14 @@ namespace AIris.WPF.ViewModels
             CurrentPage = page;
         }
 
-        /// <summary>CurrentPage 变更收口：更新 IsCurrent 高亮并触发 OnEnter。</summary>
+        /// <summary>CurrentPage 变更收口：更新 IsCurrent 高亮；旧页先 OnLeave 收尾（停预览/停订阅），新页再 OnEnter。</summary>
         private void OnCurrentPageChanged(PageViewModelBase page)
         {
-            foreach (var p in _pages) p.IsCurrent = ReferenceEquals(p, page);
+            foreach (var p in _pages)
+            {
+                if (!ReferenceEquals(p, page) && p.IsCurrent) p.OnLeave();
+                p.IsCurrent = ReferenceEquals(p, page);
+            }
             page.OnEnter();
         }
     }

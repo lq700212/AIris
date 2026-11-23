@@ -22,9 +22,9 @@
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
                        Title="ROI 标画 · 全屏" Subtitle="{Binding RecipeName}" TitleIconChar="◈"
-                       Width="1400" Height="900" WindowStartupLocation="CenterScreen" WindowState="Maximized"
+                       Width="1400" Height="900" UseLayoutRounding="True" WindowStartupLocation="CenterScreen" WindowState="Maximized"
                        Resizeable="True" ShowMaxButton="True" FixMaximizedToWorkArea="True">
-    <Border Background="{DynamicResource Brush.Fresh.CardBg}" Padding="16,10,16,14">
+    <Border Background="{DynamicResource ThemePanelBg}" Padding="16,10,16,14">
         <Grid>
             <Grid.RowDefinitions>
                 <RowDefinition Height="Auto"/>
@@ -37,11 +37,9 @@
                 <StackPanel Orientation="Horizontal">
                     <TextBlock Text="实际取像" FontSize="14" FontWeight="Bold"
                                Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
-                    <!-- 状态胶囊（库 KxChip，圆角矩形档；颜色走主题 Dim 键） -->
-                    <Border Style="{StaticResource KxChip}" Background="{DynamicResource ThemePrimaryDim}" Margin="10,0,0,0">
-                        <TextBlock Style="{StaticResource KxChipText}" FontSize="10.5" Text="与监控画面同比例"
-                                   Foreground="{DynamicResource ThemePrimary}"/>
-                    </Border>
+                    <!-- 状态胶囊（宿主 AiChipPri：999 药丸，颜色走 Theme* 跟随主题） -->
+                    <ContentControl Style="{StaticResource AiChipPlainPri}" Content="与监控画面同比例"
+                                    Margin="10,0,0,0" VerticalAlignment="Center"/>
                     <TextBlock Text="{Binding SelectedStep.Name, FallbackValue='—'}" FontSize="12"
                                Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="12,0,0,0"/>
                 </StackPanel>
@@ -49,7 +47,7 @@
                     <TextBlock Text="拖框移动 · 拖角缩放 · 空白拖画新框 · Esc 退出" FontSize="11"
                                Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="0,0,12,0"/>
                     <Button Content="{Binding PreviewToggleText}" Command="{Binding TogglePreviewCommand}"
-                            Style="{DynamicResource FreshPrimaryButton}" FontSize="11.5" Padding="14,5" Cursor="Hand"/>
+                            Style="{StaticResource AiBtnPrimarySm}"/>
                 </StackPanel>
             </Grid>
 
@@ -81,26 +79,26 @@
                     <StackPanel Margin="0,0,10,0">
                         <TextBlock Text="X" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
                         <TextBox Text="{Binding SelectedRoi.X, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
-                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                                 Style="{StaticResource AiInputSm}"/>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,0">
                         <TextBlock Text="Y" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
                         <TextBox Text="{Binding SelectedRoi.Y, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
-                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                                 Style="{StaticResource AiInputSm}"/>
                     </StackPanel>
                     <StackPanel Margin="0,0,10,0">
                         <TextBlock Text="宽 W" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
                         <TextBox Text="{Binding SelectedRoi.W, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
-                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                                 Style="{StaticResource AiInputSm}"/>
                     </StackPanel>
                     <StackPanel>
                         <TextBlock Text="高 H" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"/>
                         <TextBox Text="{Binding SelectedRoi.H, UpdateSourceTrigger=PropertyChanged, FallbackValue=0}"
-                                 Style="{DynamicResource FreshInput}" FontSize="11.5" Padding="8,0"/>
+                                 Style="{StaticResource AiInputSm}"/>
                     </StackPanel>
                 </UniformGrid>
                 <Button Grid.Column="2" Content="退出全屏" Click="Close_Click"
-                        Style="{DynamicResource FreshButton}" FontSize="11.5" Padding="16,6" Cursor="Hand"/>
+                        Style="{StaticResource AiBtnSecondary}"/>
             </Grid>
         </Grid>
     </Border>

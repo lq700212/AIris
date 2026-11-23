@@ -1,12 +1,23 @@
 <!--
   设备与集成（设计稿 data-page="settings" · C 方案）
 
-  ┌ 页头：⚙ 设备与集成            [← 返回监控台] [保存(primary)] ┐
-  ├──────────────┬──────────────────────────────────────────────┤
-  │ 设备列表卡    │ 参数卡（相机 IP:端口/曝光 · 光源亮度+漫射罩     │
-  │ (选中高亮)    │ · 引导屏/声光开关 · MES 地址+启用）             │
-  │              │ 底部：[高级参数…] [采集测试帧]                  │
-  └──────────────┴──────────────────────────────────────────────┘
+  ┌ 页头：⚙ 设备与集成 · 相机/光源/引导屏/声光/MES   [← 返回监控台] [保存] ┐
+  ├──────────────┬────────────────────────────────────────────────────────┤
+  │ 设备列表 236  │ 连接参数卡：相机IP(*) / 端口(130) / 曝光(*)             │
+  │ align-self:   │            光源亮度滑块(*) / MES 地址(*)                │
+  │ start         │            ── 分隔 ──                                  │
+  │ 每行=状态点   │            4 个复选框 2×2（框左字右，KxCheckBox 形态）  │
+  │ +名称         ├────────────────────────────────────────────────────────┤
+  │ 在线绿/离线灰 │ Mock 说明条 + [采集测试帧]                              │
+  │ /未配置橙     │                                                        │
+  └──────────────┴────────────────────────────────────────────────────────┘
+
+  vNext 落地（2026-11-23 整改）：
+  · 左导航每行前加 6px 连接状态点（在线 ThemeOk / 离线 ThemeTextMuted / 未配置 ThemeWarn），
+    状态来自 VM.RefreshStatus()，保存参数后实时刷新（不是硬编码装饰）；
+  · 左卡 align-self:start 不再撑满整列（旧版底部大片空盒）；
+  · 表单按设计稿重排：首行 IP+端口(130)+曝光，第二行滑块+MES，复选框区 2×2；
+  · 滑块用宿主 AiSlider（6px 药丸轨道 + 主→粉渐变 + 16px 圆钮）。
 -->
 <UserControl x:Class="AIris.WPF.Views.SettingsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -18,108 +29,197 @@
         </Grid.RowDefinitions>
 
         <!-- 页头 -->
-        <Grid Grid.Row="0" Margin="0,0,0,12">
+        <Grid Grid.Row="0" Margin="0,0,0,14">
             <StackPanel Orientation="Horizontal">
-                <TextBlock Text="⚙ 设备与集成" FontSize="17" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                <TextBlock Text="相机 / 光源 / 引导屏 / 声光报警 / MES" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center" Margin="14,1,0,0"/>
+                <TextBlock Text="⚙ 设备与集成" Style="{StaticResource AiPageTitle}"/>
+                <TextBlock Text="相机 / 光源 / 引导屏 / 声光报警 / MES" Style="{StaticResource AiPageSub}"/>
             </StackPanel>
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                <Button Content="← 返回监控台" Command="{Binding BackCommand}" Style="{DynamicResource FreshButton}"
-                        FontSize="12" Padding="14,7" Margin="0,0,8,0" Cursor="Hand"/>
-                <Button Content="保存" Command="{Binding SaveCommand}" Style="{DynamicResource FreshPrimaryButton}"
-                        FontSize="12" Padding="18,7" Cursor="Hand"/>
+                <Button Content="← 返回监控台" Command="{Binding BackCommand}"
+                        Style="{StaticResource AiBtnSecondary}" Margin="0,0,10,0"/>
+                <Button Content="保存" Command="{Binding SaveCommand}" Style="{StaticResource AiBtnPrimary}"/>
             </StackPanel>
         </Grid>
 
         <Grid Grid.Row="1">
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="230"/>
-                <ColumnDefinition Width="14"/>
+                <ColumnDefinition Width="236"/>
+                <ColumnDefinition Width="16"/>
                 <ColumnDefinition Width="*"/>
             </Grid.ColumnDefinitions>
 
-            <!-- 左：设备列表 -->
-            <Border Grid.Column="0" Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="8,10">
+            <!-- ===== 左：设备列表（align-self:start，行 = 状态点 + 名称） ===== -->
+            <Border Grid.Column="0" Style="{StaticResource AiCard}" Padding="10" VerticalAlignment="Top">
                 <ListBox ItemsSource="{Binding Devices}" SelectedIndex="{Binding SelectedDevice}"
-                         BorderThickness="0" Background="Transparent">
+                         BorderThickness="0" Background="Transparent"
+                         ScrollViewer.HorizontalScrollBarVisibility="Disabled">
+                    <ListBox.ItemContainerStyle>
+                        <Style TargetType="ListBoxItem">
+                            <Setter Property="Padding" Value="0"/>
+                            <Setter Property="Margin" Value="0,2"/>
+                            <Setter Property="HorizontalContentAlignment" Value="Stretch"/>
+                            <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="ListBoxItem">
+                                        <Border x:Name="Bd" CornerRadius="9" Padding="10,8" Background="Transparent"
+                                                BorderBrush="Transparent" BorderThickness="1">
+                                            <ContentPresenter/>
+                                        </Border>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePrimaryFill}"/>
+                                            </Trigger>
+                                            <Trigger Property="IsSelected" Value="True">
+                                                <Setter TargetName="Bd" Property="Background" Value="{DynamicResource ThemePanel2Bg}"/>
+                                                <Setter TargetName="Bd" Property="BorderBrush" Value="{DynamicResource ThemeBorder}"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </ListBox.ItemContainerStyle>
                     <ListBox.ItemTemplate>
                         <DataTemplate>
-                            <StackPanel Orientation="Horizontal" Margin="6,4">
-                                <TextBlock Text="{Binding Icon}" FontSize="12" Margin="0,0,8,0" Foreground="{DynamicResource ThemePrimary}"/>
-                                <TextBlock Text="{Binding Name}" FontSize="12.5" Foreground="{DynamicResource ThemeTextFg}"/>
-                            </StackPanel>
+                            <Grid ToolTip="{Binding StatusText}">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto"/>
+                                    <ColumnDefinition Width="*"/>
+                                </Grid.ColumnDefinitions>
+                                <!-- 连接状态点 6px（在线绿 / 离线灰 / 未配置橙） -->
+                                <Ellipse Grid.Column="0" Width="6" Height="6" Margin="0,0,8,0"
+                                         VerticalAlignment="Center">
+                                    <Ellipse.Style>
+                                        <Style TargetType="Ellipse">
+                                            <Setter Property="Fill" Value="{DynamicResource ThemeWarn}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Online">
+                                                    <Setter Property="Fill" Value="{DynamicResource ThemeOk}"/>
+                                                </DataTrigger>
+                                                <DataTrigger Binding="{Binding Status}" Value="Offline">
+                                                    <Setter Property="Fill" Value="{DynamicResource ThemeTextMuted}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </Ellipse.Style>
+                                </Ellipse>
+                                <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="12"
+                                           TextTrimming="CharacterEllipsis" VerticalAlignment="Center">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock">
+                                            <Setter Property="Foreground" Value="{DynamicResource ThemeTextMuted}"/>
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding Status}" Value="Online">
+                                                    <Setter Property="Foreground" Value="{DynamicResource ThemeTextFg}"/>
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Grid>
                         </DataTemplate>
                     </ListBox.ItemTemplate>
                 </ListBox>
             </Border>
 
-            <!-- 右：参数卡 -->
+            <!-- ===== 右：参数卡 + 底部动作条 ===== -->
             <StackPanel Grid.Column="2">
-                <Border Background="{DynamicResource ThemePanelBg}" CornerRadius="16" BorderBrush="{DynamicResource ThemeBorder}" BorderThickness="1" Padding="18,14">
+                <Border Style="{StaticResource AiCard}" Padding="18,14,18,16">
                     <StackPanel>
                         <Grid>
-                            <TextBlock Text="连接参数" FontSize="13" FontWeight="Bold" Foreground="{DynamicResource ThemeTextFg}"/>
-                            <TextBlock Text="{Binding SelectedDeviceName, FallbackValue=GigE 相机}" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Right"/>
+                            <TextBlock Text="连接参数" Style="{StaticResource AiCardTitle}"/>
+                            <TextBlock Text="{Binding SelectedDeviceName, FallbackValue=GigE 相机 · 海康}"
+                                       Style="{StaticResource AiCardSub}" HorizontalAlignment="Right"/>
                         </Grid>
-                        <UniformGrid Columns="2" Margin="0,10,0,0">
-                            <StackPanel Margin="0,0,14,8">
-                                <TextBlock Text="相机 IP : 端口" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                <Grid Margin="0,4">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*"/>
-                                        <ColumnDefinition Width="Auto"/>
-                                    </Grid.ColumnDefinitions>
-                                    <TextBox Text="{Binding CameraIp, UpdateSourceTrigger=PropertyChanged}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0"/>
-                                    <TextBox Grid.Column="1" Text="{Binding CameraPort, UpdateSourceTrigger=PropertyChanged}" Width="70" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="8,0,0,0"/>
-                                </Grid>
-                            </StackPanel>
-                            <StackPanel Margin="0,0,0,8">
-                                <TextBlock Text="曝光（µs）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                <TextBox Text="{Binding ExposureUs, UpdateSourceTrigger=PropertyChanged, FallbackValue=8000}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="0,4"/>
-                            </StackPanel>
-                            <StackPanel Margin="0,0,14,8">
-                                <TextBlock Text="光源通道 1 · 亮度" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                <Grid Margin="0,4">
-                                    <Slider Value="{Binding LightBrightness, FallbackValue=72}" Minimum="0" Maximum="100" VerticalAlignment="Center"/>
-                                    <TextBlock Text="{Binding LightBrightness, FallbackValue=72}" HorizontalAlignment="Right" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}" Margin="0,0,0,-14"/>
-                                </Grid>
-                            </StackPanel>
-                            <StackPanel Margin="0,0,0,8">
-                                <TextBlock Text="MES 接口地址（HTTP）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}"/>
-                                <TextBox Text="{Binding MesUrl, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}" Style="{DynamicResource FreshInput}" FontSize="12.5" Padding="10,0" Margin="0,4"/>
-                            </StackPanel>
-                        </UniformGrid>
 
-                        <!-- 开关组（≤5 预算：漫射罩/引导屏/声光/MES 共 4 个） -->
-                        <UniformGrid Columns="2" Margin="0,8,0,0">
-                            <Grid Margin="0,0,14,6">
-                                <TextBlock Text="漫射罩常开（防金属反光）" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
-                                <CheckBox IsChecked="{Binding DiffuserOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,6">
-                                <TextBlock Text="引导屏同步工步文案" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
-                                <CheckBox IsChecked="{Binding GuideScreenOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
-                            </Grid>
-                            <Grid Margin="0,0,14,6">
-                                <TextBlock Text="三色声光报警灯" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
-                                <CheckBox IsChecked="{Binding BeaconOn}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
-                            </Grid>
-                            <Grid Margin="0,0,0,6">
-                                <TextBlock Text="MES 判定结果上报" FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
-                                <CheckBox IsChecked="{Binding MesEnabled}" HorizontalAlignment="Right" Content="启用" FontSize="11.5" Foreground="{DynamicResource ThemeTextFg}"/>
-                            </Grid>
-                        </UniformGrid>
+                        <!-- 首行：IP(*) + 端口(130) + 曝光(*)（设计稿 1fr 130px 1fr） -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="130"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="相机 IP" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding CameraIp, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}" ToolTip="真机接入后用于 GigE 枚举连接"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="端口" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding CameraPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}" ToolTip="GigE 相机 HTTP/控制端口"/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="4">
+                                <TextBlock Text="曝光（μs）" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding ExposureUs, UpdateSourceTrigger=PropertyChanged, FallbackValue=8000}"
+                                         Style="{StaticResource AiInput}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 第二行：光源亮度滑块 + MES 地址 -->
+                        <Grid Margin="0,14,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="光源通道 1 · 亮度" Style="{StaticResource AiFormLabel}"/>
+                                <Grid Margin="0,0,26,0">
+                                    <Slider Value="{Binding LightBrightness, FallbackValue=72}"
+                                            Minimum="0" Maximum="100" Style="{StaticResource AiSlider}"/>
+                                    <TextBlock Text="{Binding LightBrightness, FallbackValue=72}"
+                                               FontSize="12" FontWeight="SemiBold"
+                                               Foreground="{DynamicResource ThemeTextFg}"
+                                               HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                                </Grid>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="MES 接口地址（HTTP）" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding MesUrl, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
+                                         Style="{StaticResource AiInput}"
+                                         ToolTip="示例：http://mes.local/api/v1/inspect（留空 = 不接入 MES）"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Style="{StaticResource AiDivider}" Margin="0,14"/>
+
+                        <!-- 复选框 2×2（框左字右，AiCheckBox 对位库 KxCheckBox 形态） -->
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="24"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto"/>
+                                <RowDefinition Height="Auto"/>
+                            </Grid.RowDefinitions>
+                            <CheckBox Grid.Row="0" Grid.Column="0" IsChecked="{Binding DiffuserOn}"
+                                      Style="{StaticResource AiCheckBox}" Content="漫射罩常开（防金属反光）"/>
+                            <CheckBox Grid.Row="0" Grid.Column="2" IsChecked="{Binding GuideScreenOn}"
+                                      Style="{StaticResource AiCheckBox}" Content="引导屏同步工步文案"/>
+                            <CheckBox Grid.Row="1" Grid.Column="0" IsChecked="{Binding BeaconOn}"
+                                      Style="{StaticResource AiCheckBox}" Content="三色声光报警灯"
+                                      Margin="0,10,0,0"/>
+                            <CheckBox Grid.Row="1" Grid.Column="2" IsChecked="{Binding MesEnabled}"
+                                      Style="{StaticResource AiCheckBox}" Content="MES 判定结果上报"
+                                      Margin="0,10,0,0"/>
+                        </Grid>
                     </StackPanel>
                 </Border>
 
-                <!-- 底部动作 -->
-                <Border Background="{DynamicResource ThemePanel2Bg}" CornerRadius="14" Padding="14,10" Margin="0,12,0,0">
+                <!-- 底部动作条（Mock 说明 + 采集测试帧） -->
+                <Border Style="{StaticResource AiCard}" Margin="0,14,0,0" Padding="14,10">
                     <Grid>
-                        <TextBlock Text="Mock 演示态：参数即配置真机时的目标值，保存即生效" FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" VerticalAlignment="Center"/>
-                        <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
-                            <Button Content="采集测试帧" Command="{Binding TestCameraCommand}" Style="{DynamicResource FreshButton}"
-                                    FontSize="12" Padding="14,6" Cursor="Hand"/>
-                        </StackPanel>
+                        <TextBlock Text="Mock 演示态：参数即配置真机时的目标值，保存即生效"
+                                   FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
+                                   VerticalAlignment="Center"/>
+                        <Button Content="采集测试帧" Command="{Binding TestCameraCommand}"
+                                Style="{StaticResource AiBtnSecondarySm}" HorizontalAlignment="Right"/>
                     </Grid>
                 </Border>
             </StackPanel>
