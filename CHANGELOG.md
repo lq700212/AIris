@@ -2,6 +2,55 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.14（2026-11-23）检测引擎卡扩展：Qwen3-VL-8B + 自定义引擎（添加/删除/独立参数）
+
+### 一、引擎卡独立连接参数（Core 层）
+
+- 新增 `AIris.Core\Model\EngineCardDefinition`：引擎卡定义（Id/Name/LicenseNote/IsMock/IsBuiltin +
+  该卡独立的 Protocol/HttpBaseUrl/HttpModel/ApiKey/HttpTimeoutMs）；内置卡只由 `EngineRegistry` 预设，
+  自定义卡由「＋ 添加引擎」创建；
+- 新增 `AIris.Core\Store\EngineCardStore`：落 `Data\EngineCards.json`（`Overrides` 内置卡参数覆盖 +
+  `Custom` 自定义卡两段；现场数据不入库）。文件损坏按空处理不拖垮启动；读写带 lock；
+- `EngineRegistry` 重写：`Builtin` 内置 4 卡（Mock / LocateAnything-3B / Qwen2.5-VL-7B / **Qwen3-VL-8B**，
+  带默认连接参数与许可证说明）→ `AllCards()` 合并 store 覆盖与自定义卡 → `Find()` / `Create()` /
+  `DefaultProtocol()` 全部支持卡 id（含 `custom-xxxxxxxx`）；
+- `AppPaths.EngineCardsFile` 新增数据文件路径；`ServiceHub` 装配 `EngineCardStore` 并做
+  **旧 INI 首次迁移**（单套全局 HTTP 参数 → 当前引擎卡，只发生一次，老现场升级无感）。
+
+### 二、引擎页（设计稿 data-page="engine" 对位实现）
+
+- 引擎卡从 3 列改 **4 列**：新增 **Qwen3-VL-8B**（Apache 2.0 · 商用主力，当前默认 HTTP 引擎卡），
+  Qwen2.5-VL-7B 标注「上一代对照」（保留给不接受量化的现场）；
+- 每张卡新增**服务参数小字**（协议 · 模型名）——切卡前一眼看清连的是哪套服务；
+- 页头新增 **「＋ 添加引擎」**（`btn sec` 同款，与配方中心「＋ 新建配方」一致），
+  弹窗 `AddEngineDialog`（`ChromeDialogWindow` + `AiInput`/`AiBtn*`）：引擎名称 / 许可证说明 /
+  推理协议 / 服务地址 / 模型名 / API Key，校验重名 + URL 格式后落 `EngineCards.json`；
+- 自定义卡显示 🗑 删除按钮（`AiBtnDangerGhostSm`；内置卡 `Collapsed` 无入口）；
+- **切换即回填**：`SwitchTo` 把该卡的协议/地址/模型名/Key/超时写入 `EngineConfig` 并落 INI，
+  表单同步刷新；「应用配置」把现场改过的参数**回写当前卡**（切走再切回不丢）；
+- 删除当前在用的自定义卡 → 自动回落 Mock 并改写 `ActiveEngineId`，不留悬空配置；
+- 页底新增说明条（卡参数与自定义卡落盘位置、内置卡不可删）。
+
+### 三、设计稿与文档同步
+
+- `docs/ui_design_mockups.html`：引擎页 4 卡布局 + 页头「＋ 添加引擎」+ 新增弹窗 `m-add-engine` +
+  推理参数默认模型名改 `Qwen/Qwen3-VL-8B-Instruct` + 服务状态 KPI 改 Qwen3-VL-8B；
+- `docs/AIris落地指南.md`：§2.1 选型表加 Qwen3-VL-8B（FP8 显存红线）并改商用结论；
+  §2.2 补引擎卡层；§2.4 补卡片制说明；§2.5 起服务示例改 Qwen3-VL-8B-FP8 + 验收补"切卡回填"；
+  §2.6 补 Qwen3-VL-8B/4B 显存预算；§2.7 补"BF16 超 16GB / vLLM 版本"两条坑；
+  **新增 §2.8「添加检测引擎（自定义模型接入·零改代码）」**；
+- 注释同步：`IDetectionEngine` / `AuditRecord` / `ConfigModels` / `RunMonitor` / `Recipe` 内
+  模型示例文字更新（Qwen3-VL-8B 口径）。
+
+### 四、验证
+
+- 构建 0 error；新类型（`EngineCardDefinition` / `EngineCardStore` / `AddEngineDialog`）经反射确认编入程序集；
+- 浅色 / 深色引擎页目检：4 卡一行、许可证胶囊三色（橙=演示 / 红=仅研究 / 绿=Apache）、服务参数小字、
+  底部说明正常；
+- 物理点击全链路实测：添加引擎（填名/模型名 → 卡片追加 → JSON 落盘）→ 删除（确认弹窗 → 卡片消失 →
+  JSON 清空）→ 切 Qwen3-VL-8B（确认弹窗 → 表单自动回填 `openai`/`127.0.0.1:8000`/`Qwen/Qwen3-VL-8B-Instruct`、
+  INI 落盘、Mock 卡显示「回落执行中」）→ 切回 Mock 还原现场。
+
 ## V0.1.13（2026-11-23）页头图标统一 + 本地工具目录入库排除
 
 ### 一、页头标题统一带 Icon（对位设备与集成页的 `⚙ 设备与集成`）

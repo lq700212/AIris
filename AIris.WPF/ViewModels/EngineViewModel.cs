@@ -3,28 +3,44 @@ using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
 using AIris.Core.Detect;
+using AIris.Core.Model;
 using AIris.WPF.Services;
 
 namespace AIris.WPF.ViewModels
 {
-    /// <summary>引擎卡行 VM（设计稿 engine 页三张卡：Mock + LocateAnything + Qwen2.5-VL）。</summary>
+    /// <summary>引擎卡行 VM（设计稿 engine 页四张内置卡 + 自定义卡 + 虚线添加入口在页头）。</summary>
     public class EngineCardVm : ViewModelBase
     {
-        public EngineRegistry.EngineCard Card { get; }
+        public EngineCardDefinition Card { get; }
         private readonly EngineViewModel _owner;
 
-        public EngineCardVm(EngineRegistry.EngineCard card, EngineViewModel owner)
+        public EngineCardVm(EngineCardDefinition card, EngineViewModel owner)
         {
             Card = card;
             _owner = owner;
             SwitchCommand = new RelayCommand(() => owner.SwitchTo(this));
+            DeleteCommand = new RelayCommand(() => owner.DeleteEngine(this));
         }
 
         public string Name { get { return Card.Name; } }
         public string LicenseNote { get { return Card.LicenseNote; } }
         public bool IsMock { get { return Card.IsMock; } }
 
-        /// <summary>许可证胶囊语义档：Mock=Warn（演示）/ LocateAnything=Ng（仅研究不可商用）/ Qwen=Ok（Apache 商用）。</summary>
+        /// <summary>是否可删除：仅「＋ 添加引擎」创建的自定义卡可删（内置卡无删除入口）。</summary>
+        public bool CanDelete { get { return !Card.IsBuiltin && !Card.IsMock; } }
+
+        /// <summary>服务参数小字（卡片底部）：协议 · 模型名——切卡前一眼看清连的是哪套服务。</summary>
+        public string ServiceLine
+        {
+            get
+            {
+                if (Card.IsMock) return "服务参数：内置 · 无 HTTP 依赖";
+                string model = string.IsNullOrEmpty(Card.HttpModel) ? "（模型名待填）" : Card.HttpModel;
+                return "服务参数：" + (string.IsNullOrEmpty(Card.Protocol) ? "custom" : Card.Protocol) + " · " + model;
+            }
+        }
+
+        /// <summary>许可证胶囊语义档：Mock=Warn（演示）/ LocateAnything=Ng（仅研究不可商用）/ 其余=Ok（Apache 商用）。</summary>
         public string LicenseTag
         {
             get
@@ -72,6 +88,7 @@ namespace AIris.WPF.ViewModels
         public bool SwitchEnabled { get { return !_active; } }
 
         public ICommand SwitchCommand { get; }
+        public ICommand DeleteCommand { get; }
 
         /// <summary>外部刷新态：Active=选中；Fallback=选中引擎未接入、实际由 Mock 出框。</summary>
         public void Refresh()
@@ -82,8 +99,9 @@ namespace AIris.WPF.ViewModels
     }
 
     /// <summary>
-    /// 检测引擎 VM（设计稿 data-page="engine"）：引擎卡切换（二次确认）+ 推理参数 + 服务状态。
+    /// 检测引擎 VM（设计稿 data-page="engine"）：引擎卡切换（二次确认）+ 添加/删除自定义引擎 + 推理参数 + 服务状态。
     /// 大模型未接入：HTTP 引擎 Load 后 IsLoaded=false，检测走 RunMonitor 降级回落 Mock（UI 明示）。
+    /// 每张卡独立保存连接参数（Data\EngineCards.json），切换即回填表单——换模型不重复手填。
     /// </summary>
     public class EngineViewModel : PageViewModelBase
     {
@@ -96,6 +114,7 @@ namespace AIris.WPF.ViewModels
             ApplyCommand = new RelayCommand(Apply);
             BackCommand = new RelayCommand(() => ServiceHub.Main.Go("monitor"));
             TestConnectionCommand = new RelayCommand(TestConnection);
+            AddEngineCommand = new RelayCommand(AddEngine);
         }
 
         public ObservableCollection<EngineCardVm> Cards { get; } = new ObservableCollection<EngineCardVm>();
@@ -198,26 +217,38 @@ namespace AIris.WPF.ViewModels
         public ICommand ApplyCommand { get; }
         public ICommand BackCommand { get; }
         public ICommand TestConnectionCommand { get; }
+        public ICommand AddEngineCommand { get; }
 
         public override void OnEnter() { Load(); }
 
-        /// <summary>装载卡片 + 参数 + 状态。</summary>
+        /// <summary>装载卡片 + 参数 + 状态（进页面时卡列只建一次；增删卡走 ReloadCards）。</summary>
         public void Load()
         {
-            if (Cards.Count == 0)
-            {
-                foreach (var c in EngineRegistry.Cards) Cards.Add(new EngineCardVm(c, this));
-            }
-            var cfg = ServiceHub.Settings.ReadEngine();
+            if (Cards.Count == 0) ReloadCards();
+            LoadForm(ServiceHub.Settings.ReadEngine());
+            RefreshState();
+        }
+
+        /// <summary>重建卡列：内置 4 张（参数已合并现场覆盖）+ 自定义卡（Data\EngineCards.json）。</summary>
+        private void ReloadCards()
+        {
+            Cards.Clear();
+            foreach (var c in EngineRegistry.AllCards(ServiceHub.EngineCards))
+                Cards.Add(new EngineCardVm(c, this));
+        }
+
+        /// <summary>把 EngineConfig 回填到推理参数表单。</summary>
+        private void LoadForm(EngineConfig cfg)
+        {
             HttpBaseUrl = cfg.HttpBaseUrl;
             HttpModel = cfg.HttpModel;
             ApiKey = cfg.ApiKey;
             BatchSize = cfg.BatchSize;
-            Protocol = string.IsNullOrEmpty(cfg.Protocol) ? EngineRegistry.DefaultProtocol(cfg.ActiveEngineId) : cfg.Protocol;
+            Protocol = string.IsNullOrEmpty(cfg.Protocol)
+                ? EngineRegistry.DefaultProtocol(cfg.ActiveEngineId, ServiceHub.EngineCards)
+                : cfg.Protocol;
             _decodeMode = cfg.DecodeMode == "fast" ? "fast（MTP）" : cfg.DecodeMode == "slow" ? "slow（AR）" : "hybrid（MTP 优先）";
             OnPropertyChanged(nameof(DecodeMode));
-
-            RefreshState();
         }
 
         /// <summary>刷新引擎卡高亮与状态行。</summary>
@@ -259,18 +290,63 @@ namespace AIris.WPF.ViewModels
                 && !cur.IsLoaded;
         }
 
-        /// <summary>切换引擎（Host 二次确认 → SwapEngine → 落 INI → 刷新）。
+        /// <summary>切换引擎（Host 二次确认 → 卡参数写入配置 → SwapEngine → 落 INI → 表单回填 + 刷新）。
         /// 装载（探活）统一由 RunMonitor.SwapEngine 执行，这里不重复 Load（否则 HTTP 引擎白等两轮探活）。</summary>
         public void SwitchTo(EngineCardVm card)
         {
             if (!ServiceHub.Host.ShowEngineSwitch(card.Card)) return;
             var cfg = ServiceHub.Settings.ReadEngine();
             cfg.ActiveEngineId = card.Card.Id;
-            if (string.IsNullOrEmpty(cfg.Protocol)) cfg.Protocol = EngineRegistry.DefaultProtocol(card.Card.Id);   // 协议初值
-            var engine = EngineRegistry.Create(card.Card.Id, cfg);
+
+            // 该卡的独立连接参数 → 当前生效配置（换模型即回填，不用重填表单）。
+            // Mock 卡不动 HTTP 参数（保留表单，切回真实引擎时还在）。
+            if (!card.Card.IsMock)
+            {
+                cfg.Protocol = string.IsNullOrEmpty(card.Card.Protocol)
+                    ? EngineRegistry.DefaultProtocol(card.Card.Id, ServiceHub.EngineCards)
+                    : card.Card.Protocol;
+                cfg.HttpBaseUrl = card.Card.HttpBaseUrl ?? "";
+                cfg.HttpModel = card.Card.HttpModel ?? "";
+                cfg.ApiKey = card.Card.ApiKey ?? "";
+                if (card.Card.HttpTimeoutMs > 0) cfg.HttpTimeoutMs = card.Card.HttpTimeoutMs;
+            }
+
+            var engine = EngineRegistry.Create(card.Card.Id, cfg, ServiceHub.EngineCards);
             ServiceHub.Monitor.SwapEngine(engine, cfg);
             ServiceHub.Settings.WriteEngine(cfg);
-            Protocol = cfg.Protocol;            // 新引擎默认协议回填表单（用户未改协议时保持一致）
+            LoadForm(cfg);            // 新引擎的连接参数回填表单（用户未改协议时保持一致）
+            RefreshState();
+        }
+
+        /// <summary>添加自定义引擎（弹窗 → Data\EngineCards.json → 重建卡列）。</summary>
+        private void AddEngine()
+        {
+            if (!ServiceHub.Host.ShowAddEngine()) return;
+            ReloadCards();
+            RefreshState();
+            ServiceHub.Host.Info("引擎卡已添加。填好连接参数后点卡片上的「切换到此引擎」即可使用。", "已添加");
+        }
+
+        /// <summary>删除自定义引擎卡（内置卡无删除入口；删的是当前激活卡时回落 Mock）。</summary>
+        public void DeleteEngine(EngineCardVm vm)
+        {
+            if (vm == null || vm.Card.IsBuiltin) return;
+            if (!ServiceHub.Host.Confirm("删除检测引擎",
+                "删除自定义引擎卡「" + vm.Card.Name + "」？\r\n记录同步从 Data\\EngineCards.json 移除，模型服务本身不受影响。",
+                "删除", true)) return;
+
+            ServiceHub.EngineCards.DeleteCustom(vm.Card.Id);
+
+            var cfg = ServiceHub.Settings.ReadEngine();
+            if (string.Equals(cfg.ActiveEngineId, vm.Card.Id, StringComparison.OrdinalIgnoreCase))
+            {
+                // 当前激活卡被删：切回 Mock，避免 ActiveEngineId 指向不存在的卡（启动会回落 Mock 也不报错）
+                cfg.ActiveEngineId = "mock";
+                cfg.Protocol = "";
+                ServiceHub.Settings.WriteEngine(cfg);
+                ServiceHub.Monitor.SwapEngine(EngineRegistry.Create("mock", cfg, ServiceHub.EngineCards), cfg);
+            }
+            ReloadCards();
             RefreshState();
         }
 
@@ -323,7 +399,7 @@ namespace AIris.WPF.ViewModels
             }
         }
 
-        /// <summary>应用推理参数（落 INI + 实际生效：HTTP 引擎热重载重探活——旧版只落盘不生效）。</summary>
+        /// <summary>应用推理参数（落 INI + 同步写回当前引擎卡 + HTTP 引擎热重载重探活）。</summary>
         private void Apply()
         {
             var cfg = ServiceHub.Settings.ReadEngine();
@@ -334,6 +410,20 @@ namespace AIris.WPF.ViewModels
             cfg.Protocol = Protocol;
             cfg.ApiKey = ApiKey;
             ServiceHub.Settings.WriteEngine(cfg);
+
+            // 卡参数同步：现场改过的地址/模型名记住（下次切走再切回即恢复，不用重填）
+            var card = EngineRegistry.Find(cfg.ActiveEngineId, ServiceHub.EngineCards);
+            if (card != null && !card.IsMock)
+            {
+                card.Protocol = cfg.Protocol;
+                card.HttpBaseUrl = cfg.HttpBaseUrl;
+                card.HttpModel = cfg.HttpModel;
+                card.ApiKey = cfg.ApiKey;
+                card.HttpTimeoutMs = cfg.HttpTimeoutMs;
+                ServiceHub.EngineCards.SaveParams(card);
+                ReloadCards();   // 卡片底部"服务参数"小字即时更新
+                RefreshState();
+            }
 
             // 实际生效：当前引擎是 HTTP 型且协议/地址/Key 变了 → Load 重探活刷新状态（UI 即时可见）
             var engine = ServiceHub.Monitor.Engine;

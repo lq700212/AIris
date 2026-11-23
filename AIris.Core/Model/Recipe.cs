@@ -116,7 +116,7 @@ namespace AIris.Core.Model
     }
 
     /// <summary>
-    /// 判定区域矩形。坐标口径统一 0~1000 归一化整数（与 LocateAnything 输出口径一致，
+    /// 判定区域矩形。坐标口径统一 0~1000 归一化整数（与模型 grounding 输出口径一致，
     /// 落地指南 §2.1："坐标为 0~1000 归一化整数"），换相机分辨率不用改配方。
     /// </summary>
     public class ROIRect

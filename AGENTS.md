@@ -150,6 +150,7 @@
 | 自绘控件登记（待评审是否沉库 Kaleidoscope.UI） | `RecipeEditorPage.xaml` 资源 `RoiExpandButton`：纯图标方形"全屏标画"钮（四角扩展箭头 Path，30×30，圆角 9，hover 转 ThemePrimary）——库内 Kx*/Fresh* 按钮族六档均为「文字」或「图标+文字」胶囊，无纯图标方形按钮，故自绘；已满足 Theme* 键 + FocusVisualStyle=Null |
 | 主题键新增（两套字典同键换值 + 契约键段字面值红线） | `Styles/ThemeLight.xaml` + `ThemeDark.xaml` 尾部注释 |
 | 检测引擎接入（真实模型/HTTP 服务） | `AIris.Core\Detection\IDetectionEngine.cs` 文件头（接口契约 + HttpDetectionEngine 填实指引） |
+| 引擎卡扩展（内置卡预设 / 添加自定义引擎 / 卡参数落盘） | `AIris.Core\Detection\EngineRegistry.cs`（Builtin 四卡）+ `AIris.Core\Store\EngineCardStore.cs`（Data\EngineCards.json）+ `Views\AddEngineDialog.xaml` |
 | 相机接入（海康/大恒真机） | `AIris.Core\Camera\ICameraSource.cs` 文件头 + Kaleidoscope `Cameras/` 适配器 |
 | 工步/判定规则语义 | `AIris.Core\Engine\WorkstepEngine.cs` + `AIris.Core\Judge\JudgeEngine.cs` 头注释（对应落地指南 §2.7） |
 | 配方 JSON 结构 | `AIris.Core\Model\Recipe.cs` 头注释（含完整示例 JSON） |

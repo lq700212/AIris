@@ -45,14 +45,17 @@
 
 | 模型 | 许可证 | 定位 | 显存/性能参考（RTX 5070 Ti 16GB） |
 |---|---|---|---|
-| **Qwen2.5-VL-7B** | **Apache 2.0 ✅ 商用合规** | **产品化主力引擎** | 单帧约 430ms（batch=1，5070 Ti 16GB 单卡可跑） |
+| **Qwen3-VL-8B** | **Apache 2.0 ✅ 商用合规** | **当前商用主力（引擎页默认卡）** | 8.8B dense；**BF16 权重约 16~17GB，16GB 卡跑不动**，必须用官方 FP8 权重（约 9GB）单帧约 480ms（batch=1） |
+| **Qwen2.5-VL-7B** | **Apache 2.0 ✅ 商用合规** | **上一代对照（保留退路）** | BF16 约 14GB，16GB 卡原精度可跑；面板/指令跟随弱于 Qwen3，不接受量化的现场用它 |
 | LocateAnything-3B | 仅限研究，**禁商用**（底座 Qwen2.5-3B 也是 Research License，双重非商用） | **仅 POC 摸效果上限** | 单帧约 430ms；la_flash 峰值约 11.7GB；locateanything-batch 批处理 61ms/帧（16 FPS @batch≈32） |
 | Qwen2.5-VL-3B | Qwen Research License | **不要用**（3B 版不是 Apache） | — |
 | Grounding DINO / Florence-2 / OmDet-Turbo | Apache 2.0 / MIT | 备选（专用检测，语义判断能力弱） | 成熟 |
 | YOLO-World | GPLv3 | 仅限工厂内部自用（卖软件有传染风险） | — |
 
-结论：**POC 可用 LocateAnything 验证效果，出货前必须切 Qwen2.5-VL-7B**。
-模型输出口径全链路统一为 **0~1000 归一化框**（左上/右下整数），与 ROI 归一化天然同源。
+结论：**POC 可用 LocateAnything 验证效果，出货默认切 Qwen3-VL-8B（FP8）；不接受量化的现场切 Qwen2.5-VL-7B 原精度**。
+两家均为 Apache 2.0，卡上许可证胶囊如实标注（研究许可红/商用绿）。
+模型输出口径全链路统一为 **0~1000 归一化框**（左上/右下整数），与 ROI 归一化天然同源；
+Qwen3-VL 原生输出 `bbox_2d` 同口径，`InferClient`/`BoxParser` 零改动。
 
 ### 2.2 接入架构（写代码前先看懂这四层）
 
@@ -72,7 +75,9 @@
 服务层  推理服务（vLLM / llama-server / Ollama / 自研 FastAPI）
 ```
 
-「换模型/换框架只改下拉框」的实现就在这一层：宿主与业务零改动。
+「换模型/换框架只改下拉框」的实现就在这一层：宿主与业务零改动；
+多模型并存时再加一层**引擎卡**（`EngineRegistry` 内置 4 卡 + `EngineCardStore` 自定义卡，
+每卡独立连接参数，切卡即回填）——见 §2.8。
 
 ### 2.3 四协议对照（引擎页下拉 → 服务端部署形态）
 
@@ -101,45 +106,55 @@
 
 ### 2.4 引擎页配置项对照（现场怎么填）
 
+> 引擎页是**卡片制**：内置 4 张卡（Mock / LocateAnything-3B / Qwen2.5-VL-7B / Qwen3-VL-8B），
+> 每张卡**独立保存**下面这套连接参数（落 `Data\EngineCards.json`），切换即回填表单；
+> 「＋ 添加引擎」可追加自定义卡（见 §2.8）。下表字段 = 当前选中卡的参数。
+
 | 界面字段 | EngineConfig 字段 | 说明 |
 |---|---|---|
 | 推理协议 | `Protocol` | 上表四值之一；未知值回退 custom |
 | HTTP 推理服务地址 | `HttpBaseUrl` | 如 `http://127.0.0.1:8000`（不带端点路径） |
 | 服务模型名 | `HttpModel` | vLLM 的 `--served-model-name`；Ollama 的模型 tag |
 | API Key | `ApiKey` | 本地服务留空；OpenAI/Anthropic 网关才填 |
-| 超时 | `HttpTimeoutMs` | 默认 5000ms（单帧 430ms 量级，留足余量） |
+| 超时 | `HttpTimeoutMs` | 默认 5000ms（单帧 430~480ms 量级，留足余量） |
 | 批处理大小 | （自研服务端参数） | 界面展示用；batch 越大吞吐越高，延迟也越高 |
 | 解码模式 | （LocateAnything 三档） | `hybrid`（MTP 优先，默认）/ `fast`（MTP）/ `slow`（AR） |
 
 ### 2.5 接入步骤（照着做即可验收）
 
-1. **起服务端**（示例：vLLM + Qwen2.5-VL-7B，OpenAI 兼容口）
+1. **起服务端**（示例：vLLM + Qwen3-VL-8B，OpenAI 兼容口）
    ```bash
-   # Linux + CUDA（vLLM 以 Linux 为主；LocateAnything 官方路径亦仅 Linux + BF16；Windows 现场用 WSL2 或 Linux 迷你主机）
-   vllm serve Qwen/Qwen2.5-VL-7B-Instruct --served-model-name qwen2.5-vl-7b \
+   # Linux + CUDA（vLLM 以 Linux 为主；Windows 现场用 WSL2 或 Linux 迷你主机）
+   # 【显存红线】Qwen3-VL-8B BF16 约 16~17GB，16GB 卡必须用官方 FP8 权重（约 9GB）：
+   vllm serve Qwen/Qwen3-VL-8B-Instruct-FP8 --served-model-name Qwen/Qwen3-VL-8B-Instruct \
        --port 8000 --limit-mm-per-prompt image=1 --max-model-len 8192
+   # 16GB 卡替代方案：Qwen3-VL-4B BF16（约 8GB）或 Qwen2.5-VL-7B BF16（约 14GB 原精度）
    # 离线现场：模型权重提前落盘，HF_HUB_OFFLINE=1
+   # vLLM 版本要求 ≥0.11.0（Qwen3-VL 架构支持；旧版会报 unknown model）
    ```
-2. **引擎页**选协议 `openai` → 填地址/模型名 → 点「测试连接」（= ProbeAsync）
-   出现「在线（xx ms）」即通；失败看运行日志的探活原因（地址/端口/模型名/显存）。
-3. **切换引擎** → 确认弹窗 → `IsLoaded=true`，监控台右上「Mock 演示引擎」标签变真实引擎名。
+2. **引擎页**选引擎卡（或「＋ 添加引擎」新建）→ 选协议 `openai` → 填地址/模型名 → 点「测试连接」（= ProbeAsync）
+   出现「探活在线（xx ms）」即通；失败看就地胶囊的原因（地址/端口/模型名/显存）。
+3. **切换引擎** → 确认弹窗（显示该卡协议/地址/模型名）→ `IsLoaded=true`，监控台右上「Mock 演示引擎」标签变真实引擎名。
 4. **配方 prompts 来源**：工步 `ExpectedPart` 的自然语言（如「金属垫板」「M3 盘头螺丝」），
    每帧随工步变化传给检测引擎，无需重启服务。
 5. **验收清单**：
    - 监控台单帧耗时显示真实推理耗时（非 0ms）；运行日志出现 `[<引擎名>] openai 协议探活 …`；
    - 故意断开服务 → 信息行出现「未接入，检测回落 Mock」，日志 5s 节流不刷屏；
    - 审计记录 `EngineName` 字段如实写真实引擎名（不是 Mock）；
-   - 判定结果与 Mock 口径一致（ROI-IoU × 数量 × 稳定帧），无置信度字段泄漏到 UI。
+   - 判定结果与 Mock 口径一致（ROI-IoU × 数量 × 稳定帧），无置信度字段泄漏到 UI；
+   - 切走再切回该卡：协议/地址/模型名自动回填（不用重填）。
 
 ### 2.6 性能预算（装配节拍视角）
 
-- 装配是**秒级人工节拍**，单帧 430ms 的 3B/7B 量级都绰绰有余（16 FPS@batch32 为
-  LocateAnything-3B + locateanything-batch 实测，7B 以 batch=1 单帧为准）；
+- 装配是**秒级人工节拍**，单帧 430~480ms 的 3B/7B/8B 量级都绰绰有余（16 FPS@batch32 为
+  LocateAnything-3B + locateanything-batch 实测，7B/8B 以 batch=1 单帧为准）；
 - 检测线程节拍 300ms（`RunMonitor.DetectIntervalMs`），JPEG 编码开销未实测，
   按 1080p 量级预留 10~20ms/帧；
 - 多工位并行 = 多服务实例/多卡，不要在一个服务里串行排多路（延迟叠加）；
-- 显存：Qwen2.5-VL-7B BF16 权重约 14GB，加运行时按 15~16GB 预留（估算，以实机为准；
-  5070 Ti 16GB 单卡 batch=1 可跑，上批处理需降 batch 或换 24GB 卡）；
+- 显存：Qwen3-VL-8B BF16 权重约 16~17GB（**16GB 卡跑不动**），必须用官方 FP8 权重
+  （约 9GB，加 KV cache 按 12~13GB 预留；FP8 需要 Ada 及以上架构，5070 Ti 支持）；
+  Qwen2.5-VL-7B BF16 约 14GB，加运行时按 15~16GB 预留（5070 Ti 16GB 单卡 batch=1 可跑，
+  上批处理需降 batch 或换 24GB 卡）；Qwen3-VL-4B BF16 约 8GB（16GB 卡的安全余量选择）；
   LocateAnything-3B 实测 la_flash batch=4 峰值约 11.7GB（sdpa 后端约 35GB，必须 flash 后端）。
 
 ### 2.7 已知坑（先知道再踩）
@@ -150,8 +165,26 @@
 | 小零件（M3）/相似件/对称件装反 | 检出率不保证 | POC 必测 10 类典型零件；兜底：局部放大二次推理 / few-shot 微调 / 模板匹配双通道（`DualChannel` 已留规则位） |
 | 金属反光 | 误检/漏检 | 高角度环形光（60~90°）+ 漫射罩，必要时偏振片（硬件选型走 vision-hardware-selection 流程精算） |
 | LocateAnything 官方仅 Linux + BF16 | Windows 直跑不了 | 服务端 Linux/WSL2；WPF 宿主只调 HTTP，不吃模型依赖 |
+| Qwen3-VL-8B BF16 超 16GB | 16GB 卡 OOM 起不来 | 用官方 FP8 权重（`Qwen3-VL-8B-Instruct-FP8`，约 9GB）；或换 Qwen3-VL-4B / Qwen2.5-VL-7B |
+| vLLM 版本过旧不认 Qwen3-VL | 报 unknown model / 架构不支持 | vLLM ≥0.11.0；老版本先升级镜像 |
 | Anthropic 无 health | 探活只能"配置即就绪" | 离线现场本来就不用它，忽略 |
 | vLLM grounding 输出不稳定 | 偶尔带 markdown 围栏/多余文字 | BoxParser 已容错（剥围栏、双策略合并），仍不稳定就调 prompt 或换 custom 框直出 |
+
+### 2.8 添加检测引擎（自定义模型接入 · 零改代码）
+
+引擎页右上「＋ 添加引擎」= 接新模型的**第一入口**，不用改代码、不用发版：
+
+1. 填 **引擎名称**（卡片标题，必填、不可与现有卡重名）、**许可证说明**（如实标注，商用前确认）；
+2. 选 **推理协议**（§2.3 四档，OpenAI 兼容=vLLM/llama-server 推荐）、填 **服务地址 / 模型名 / API Key**；
+3. 点「添加引擎」→ 卡片追加到引擎页末尾（带 🗑 删除按钮）；
+4. 点该卡「切换到此引擎」→ 确认 → 探活通过即接上；未接通时检测照旧回落 Mock（流程不中断）。
+
+**落盘与红线**：
+- 自定义卡存 `00_ExeBuild\Data\EngineCards.json` 的 `Custom` 段（现场数据，**不入库**、不进部署包）；
+  内置卡的参数改动记在 `Overrides` 段（按 id 覆盖，升级版本不丢现场配置）。
+- **内置 4 张卡不可删除**（代码内预设）；自定义卡可删，删除不影响模型服务本身。
+- 删掉当前正在使用的自定义卡 → 自动回落 Mock，`ActiveEngineId` 同步改写，不会留悬空配置。
+- 旧版 INI（单套全局 HTTP 参数）首次启动自动迁移到当前引擎卡（只发生一次），老现场升级无感。
 
 ---
 
@@ -164,7 +197,7 @@
 
 | # | 工作 | 状态 | 怎么做 | 验收 |
 |---|---|---|---|---|
-| 1 | **检测服务端接入** | 🟡 宿主侧全就绪，差服务端 | 按 §2.5 部署 vLLM/Ollama/自研 FastAPI；引擎页配置切换 | §2.5 验收清单全过 |
+| 1 | **检测服务端接入** | 🟡 宿主侧全就绪，差服务端 | 按 §2.5 部署 vLLM/Ollama/自研 FastAPI；引擎页配卡切换（新模型走 §2.8「＋ 添加引擎」零改代码） | §2.5 验收清单全过 |
 | 2 | **POC 检出率实测** | ⬜ | 5070 Ti 工控机 + 工厂真实工件照片，测 10 类典型零件（大件/小螺丝/反光件/相似件/对称件）；产出检出率报告 | 关键零件检出率 ≥ 工厂可接受阈值（建议与产线共同定），未过不承诺交付 |
 
 ### 3.2 硬件接入（POC 通过后按工位推进）

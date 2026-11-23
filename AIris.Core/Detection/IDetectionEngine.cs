@@ -51,7 +51,7 @@ namespace AIris.Core.Detect
     /// 检测引擎唯一接入面（AGENTS.md"大模型现状"红线：真实接入=实现本接口，禁止绕过）。
     ///
     /// 接入形态对位落地指南 §2.2：
-    ///  - LocateAnything-3B / Qwen2.5-VL-7B 都是"Linux 常驻推理服务（FastAPI/vLLM）+ HTTP 调用"
+    ///  - LocateAnything-3B / Qwen2.5-VL-7B / Qwen3-VL-8B 都是"Linux 常驻推理服务（FastAPI/vLLM）+ HTTP 调用"
     ///    部署形态 → 真实引擎 = 填实 HttpDetectionEngine 的 DetectAsync（组 JSON POST，
     ///    发图像 + prompts，回 0~1000 归一化框数组）。本接口签名即未来真实形态。
     ///  - POC 效果验证用 transformers 原生推理时，也可以包一层本地引擎实现本接口。
@@ -60,10 +60,10 @@ namespace AIris.Core.Detect
     /// </summary>
     public interface IDetectionEngine : IDisposable
     {
-        /// <summary>注册 id（EngineRegistry 键，如 mock / locateanything-http / qwen-vl-http）。</summary>
+        /// <summary>注册 id（EngineRegistry 键，如 mock / locateanything-http / qwen-vl-http / qwen3-vl-http / custom-xxxxxxxx）。</summary>
         string Id { get; }
 
-        /// <summary>显示名（引擎卡标题，如"LocateAnything-3B"）。</summary>
+        /// <summary>显示名（引擎卡标题，如"Qwen3-VL-8B"）。</summary>
         string Name { get; }
 
         /// <summary>许可证说明（引擎卡直接标注，避免误用——设计稿 engine 页"许可证：仅限研究"）。</summary>

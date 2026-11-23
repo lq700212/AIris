@@ -21,6 +21,9 @@ namespace AIris.Core.Config
         /// <summary>配方根目录：Data\Recipes\，每产品一个 &lt;名称&gt;.json。</summary>
         public static string RecipeDir => Path.Combine(BaseDir, "Data", "Recipes");
 
+        /// <summary>引擎卡文件：Data\EngineCards.json（内置卡参数覆盖 + 自定义引擎卡）。</summary>
+        public static string EngineCardsFile => Path.Combine(BaseDir, "Data", "EngineCards.json");
+
         /// <summary>审计存根目录：Data\Audit\，JSONL 按天 + 截图 PNG。</summary>
         public static string AuditDir => Path.Combine(BaseDir, "Data", "Audit");
 

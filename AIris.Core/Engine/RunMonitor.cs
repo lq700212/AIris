@@ -224,7 +224,7 @@ namespace AIris.Core.Engine
         public WorkstepEngine Steps { get { return _steps; } }
         public Recipe Recipe { get { return _recipe; } }
 
-        /// <summary>最近一帧实际执行引擎（未接入回落时为 "LocateAnything-3B→Mock"；尚未检测为空串）。
+        /// <summary>最近一帧实际执行引擎（未接入回落时为 "Qwen3-VL-8B→Mock"；尚未检测为空串）。
         /// UI 用它显示真实出框者——不能把"配置选了谁"当成"实际跑了谁"。</summary>
         public string LastExecEngineName { get { return _lastExecName; } }
 
@@ -424,7 +424,7 @@ namespace AIris.Core.Engine
             string baseLine = "2592 × 1944 · 8 fps";
             if (_lastOutcome == null) return baseLine;
 
-            // 实际执行者优先（回落时显示 "LocateAnything-3B→Mock xx ms"），未检测过退回当前引擎
+            // 实际执行者优先（回落时显示 "Qwen3-VL-8B→Mock xx ms"），未检测过退回当前引擎
             var name = _lastExecName;
             var ms = _lastExecMs;
             if (string.IsNullOrEmpty(name))

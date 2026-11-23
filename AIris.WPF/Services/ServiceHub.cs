@@ -3,6 +3,7 @@ using AIris.Core.Camera;
 using AIris.Core.Config;
 using AIris.Core.Detect;
 using AIris.Core.Engine;
+using AIris.Core.Model;
 using AIris.Core.Store;
 using AIris.WPF.ViewModels;
 
@@ -24,7 +25,10 @@ namespace AIris.WPF.Services
         void ShowNgDetail(VerdictEventArgs verdict, AIris.Core.Model.Recipe recipe);
 
         /// <summary>引擎切换确认弹窗；返回是否确认切换。</summary>
-        bool ShowEngineSwitch(EngineRegistry.EngineCard card);
+        bool ShowEngineSwitch(EngineCardDefinition card);
+
+        /// <summary>添加检测引擎弹窗（自定义模型接入）；返回是否创建成功。</summary>
+        bool ShowAddEngine();
 
         /// <summary>存档详情弹窗（审计页"⋯"）。</summary>
         void ShowShot(AIris.Core.Model.AuditRecord record);
@@ -48,6 +52,9 @@ namespace AIris.WPF.Services
         /// <summary>配方存储。</summary>
         public static RecipeStore Recipes { get; private set; }
 
+        /// <summary>引擎卡存储（自定义引擎卡 + 内置卡参数覆盖，Data\EngineCards.json）。</summary>
+        public static EngineCardStore EngineCards { get; private set; }
+
         /// <summary>运行编排（采集→检测→判定→工步→审计）。</summary>
         public static RunMonitor Monitor { get; private set; }
 
@@ -65,10 +72,16 @@ namespace AIris.WPF.Services
             AppPaths.EnsureDirs();
             Settings = new AppSettings();
             Recipes = new RecipeStore();
+            EngineCards = new EngineCardStore();
 
             var cam = new MockCameraSource();
             var cfg0 = Settings.ReadEngine();   // 协议初值注入（cfg.Protocol 空时按引擎卡默认）
-            var engine = EngineRegistry.Create(cfg0.ActiveEngineId, cfg0);
+
+            // 首次升级迁移（2026-11-23 引擎卡独立参数）：旧版 INI 只有一套全局 HTTP 参数，
+            // 本卡还没有参数记录时把它落到当前引擎卡上（只发生一次；之后以卡参数为权威）。
+            MigrateEngineCardParams(cfg0);
+
+            var engine = EngineRegistry.Create(cfg0.ActiveEngineId, cfg0, EngineCards);
             var audit = new JsonAuditStore();
             Monitor = new RunMonitor(cam, engine, audit);
             Monitor.Log += m => AppLog.Info(m);
@@ -78,6 +91,26 @@ namespace AIris.WPF.Services
             Main = mainVm;
             Host = new AppHost(mainVm);
             mainVm.AttachRuntime();   // 顶栏引擎态胶囊订阅（此时 Monitor 已装配；构造器里还拿不到）
+        }
+
+        /// <summary>
+        /// 首次升级迁移：旧版 INI 的全局 HTTP 参数 → 当前引擎卡（按 id 存 Data\EngineCards.json）。
+        /// 已有参数记录则跳过（之后"应用配置"/切换都会维护卡参数，卡是权威）。
+        /// </summary>
+        private static void MigrateEngineCardParams(EngineConfig cfg)
+        {
+            if (cfg == null || string.IsNullOrEmpty(cfg.ActiveEngineId)) return;
+            if (string.Equals(cfg.ActiveEngineId, "mock", StringComparison.OrdinalIgnoreCase)) return;
+            if (EngineCards.HasParams(cfg.ActiveEngineId)) return;
+
+            var def = EngineRegistry.Find(cfg.ActiveEngineId, EngineCards);
+            if (def == null || def.IsMock) return;
+            if (!string.IsNullOrEmpty(cfg.Protocol)) def.Protocol = cfg.Protocol;
+            if (!string.IsNullOrEmpty(cfg.HttpBaseUrl)) def.HttpBaseUrl = cfg.HttpBaseUrl;
+            if (!string.IsNullOrEmpty(cfg.HttpModel)) def.HttpModel = cfg.HttpModel;
+            if (!string.IsNullOrEmpty(cfg.ApiKey)) def.ApiKey = cfg.ApiKey;
+            if (cfg.HttpTimeoutMs > 0) def.HttpTimeoutMs = cfg.HttpTimeoutMs;
+            EngineCards.SaveParams(def);
         }
 
         /// <summary>最近一条 NG 审计记录（NG 详情弹窗回显截图用；无则 null）。</summary>
@@ -122,12 +155,20 @@ namespace AIris.WPF.Services
                 dlg.ShowDialog();
             }
 
-            public bool ShowEngineSwitch(EngineRegistry.EngineCard card)
+            public bool ShowEngineSwitch(EngineCardDefinition card)
             {
                 return Confirm("切换检测引擎",
                     "切换到 " + card.Name + " 将卸载当前引擎并重新加载。\r\n许可证：" + card.LicenseNote
+                    + "\r\n服务参数：" + card.Protocol + " · " + card.HttpBaseUrl + " · " + card.HttpModel
                     + "\r\n未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）。",
                     "确认切换", false);
+            }
+
+            public bool ShowAddEngine()
+            {
+                var dlg = new Views.AddEngineDialog();
+                dlg.Owner = Owner();
+                return dlg.ShowDialog() == true;
             }
 
             public void ShowShot(AIris.Core.Model.AuditRecord record)

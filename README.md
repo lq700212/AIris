@@ -44,7 +44,7 @@ powershell -File Tools\click_ui.ps1 -x 349 -y 25
 | 运行监控台 —— 画面叠加 + 工步引导 + 演示控制 | 配方编辑器 —— 自然语言工步 + ROI 拖拽标画 |
 | --- | --- |
 | ![运行监控台](docs/images/ui_monitor.png) | ![配方编辑器](docs/images/ui_editor.png) |
-| **配方中心** —— 每产品一份配方，零代码换型 | **检测引擎** —— 三引擎卡 + 四协议推理参数 + 服务状态 |
+| **配方中心** —— 每产品一份配方，零代码换型 | **检测引擎** —— 四引擎卡 + 自定义引擎接入 + 四协议推理参数 |
 | ![配方中心](docs/images/ui_recipe.png) | ![检测引擎](docs/images/ui_engine.png) |
 | **审计追溯** —— 每步截图存档，客诉举证直接调档 | **设备与集成** —— 相机 / 光源 / 引导屏 / 声光 / MES |
 | ![审计追溯](docs/images/ui_audit.png) | ![设备与集成](docs/images/ui_settings.png) |
@@ -53,7 +53,7 @@ powershell -File Tools\click_ui.ps1 -x 349 -y 25
 
 - **自然语言配方**：预期零件用一句话描述（如"4 颗 M3 盘头螺丝"），改这句话就换检测目标，零标注训练；ROI 判定区域直接在**实际取像上拖拽标画**（拖框移动 / 四角手柄缩放 / 空白拖画新框）；
 - **确定性判定**：位置判定走 ROI-IoU 几何规则 × 数量校验 × 连续 N 帧稳定，不依赖模型"理解"位置，可审计；
-- **引擎可插拔**：内置 Mock / LocateAnything-3B（POC）/ Qwen2.5-VL-7B（商用推荐）三张引擎卡，许可证状态直接写在卡上；推理协议层沉库 `Kaleidoscope.Infer`，四协议（OpenAI 兼容 / Anthropic / Ollama / 自研 /detect）换部署形态只改下拉框；
+- **引擎可插拔**：内置 Mock / LocateAnything-3B（POC）/ Qwen2.5-VL-7B（上一代对照）/ Qwen3-VL-8B（当前商用主力）四张引擎卡，**每卡独立保存连接参数、切换即回填**，许可证状态直接写在卡上；「＋ 添加引擎」可零改代码接入新模型（自定义卡落 `Data\EngineCards.json`，可删；内置卡不可删）；推理协议层沉库 `Kaleidoscope.Infer`，四协议（OpenAI 兼容 / Anthropic / Ollama / 自研 /detect）换部署形态只改下拉框；
 - **未接入不尬演**：真实引擎探活失败时检测自动回落 Mock 演示——顶栏状态胶囊明示"回落 Mock"、画面信息行标注 `→Mock`、审计 `EngineName` 如实记录替身出框；
 - **工步状态机**：按配方步序引导装配，OK 自动推进 / NG 挂起告警 / 人工重检闭环；
 - **质量追溯链**：每个工步判定自动截图存档（JSONL 按天 + PNG），规则快照随档可复核；

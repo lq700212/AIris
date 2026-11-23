@@ -1,17 +1,19 @@
 <!--
   检测引擎页（设计稿 data-page="engine" · C 方案）
 
-  ┌ 页头：🧠 检测引擎 · Qwen2.5-VL-7B 已加载        [← 返回监控台] [应用配置] ┐
+  ┌ 页头：🧠 检测引擎 · Qwen3-VL-8B 已加载   [← 返回监控台] [＋ 添加引擎] [应用配置] ┐
   ├──────────────────────────────────────────────────────────────────────┤
-  │ 三引擎卡（3 列等分）：Mock / LocateAnything-3B / Qwen2.5-VL-7B          │
-  │  · 许可证直接标在卡上（研究许可红胶囊，Apache 绿胶囊）                  │
+  │ 四引擎卡（4 列等分）：Mock / LocateAnything-3B / Qwen2.5-VL-7B / Qwen3-VL-8B │
+  │  · 许可证直接标在卡上（研究许可红胶囊，Apache 绿胶囊）                      │
+  │  · 每卡独立连接参数（协议/地址/模型名），切换即回填推理参数表单             │
+  │  · 「＋ 添加引擎」追加自定义卡（可删除），接新模型零改代码                  │
   ├──────────────────────────────────────────────────────────────────────┤
-  │ 推理参数卡（2 列）：协议 / API Key → 地址 / 模型名 → 解码 / 批大小       │
-  │  · 底部右对齐：就地探活胶囊（绿=在线+ms / 红=不可达原因）+ [测试连接]   │
+  │ 推理参数卡（2 列）：协议 / API Key → 地址 / 模型名 → 解码 / 批大小         │
+  │  · 底部右对齐：就地探活胶囊（绿=在线+ms / 红=不可达原因）+ [测试连接]      │
   ├──────────────────────────────────────────────────────────────────────┤
-  │ 服务状态卡（4 KPI）：显存 / 单帧耗时 / 累计调用 / 当前引擎              │
+  │ 服务状态卡（4 KPI）：显存 / 单帧耗时 / 累计调用 / 当前引擎                  │
   └──────────────────────────────────────────────────────────────────────┘
-  vNext 落地：测试连接结果就地反馈（TestState/TestText 由 VM 写入，不用翻日志）。
+  vNext 落地（2026-11-23）：引擎卡扩展 = Qwen3-VL-8B 内置卡 + 自定义引擎卡（添加/删除/独立参数）。
 -->
 <UserControl x:Class="AIris.WPF.Views.EnginePage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -38,6 +40,9 @@
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Right">
                 <Button Content="← 返回监控台" Command="{Binding BackCommand}"
                         Style="{StaticResource AiBtnSecondary}" Margin="0,0,10,0"/>
+                <Button Content="＋ 添加引擎" Command="{Binding AddEngineCommand}"
+                        Style="{StaticResource AiBtnSecondary}" Margin="0,0,10,0"
+                        ToolTip="接入新的视觉模型（自定义引擎卡，落 Data\EngineCards.json）"/>
                 <Button Content="应用配置" Command="{Binding ApplyCommand}"
                         Style="{StaticResource AiBtnPrimary}"/>
             </StackPanel>
@@ -46,10 +51,10 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="0,0,4,0">
             <StackPanel>
-                <!-- ===== 三引擎卡（3 列等分） ===== -->
+                <!-- ===== 引擎卡（4 列等分；自定义卡追加在末尾） ===== -->
                 <ItemsControl ItemsSource="{Binding Cards}">
                     <ItemsControl.ItemsPanel>
-                        <ItemsPanelTemplate><UniformGrid Columns="3"/></ItemsPanelTemplate>
+                        <ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate>
                     </ItemsControl.ItemsPanel>
                     <ItemsControl.ItemContainerStyle>
                         <Style TargetType="ContentPresenter">
@@ -121,12 +126,24 @@
                                     <TextBlock Text="切换需重载引擎（未接入时回落 Mock 演示）"
                                                FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
                                                Margin="0,2,0,0" TextWrapping="Wrap" LineHeight="18"/>
+                                    <!-- 服务参数小字（协议 · 模型名）：切卡前一眼看清连的是哪套服务 -->
+                                    <TextBlock Text="{Binding ServiceLine}" FontSize="10.5"
+                                               Foreground="{DynamicResource ThemeTextMuted}"
+                                               Margin="0,8,0,0" TextTrimming="CharacterEllipsis"
+                                               ToolTip="{Binding ServiceLine}"/>
 
-                                    <Button Content="{Binding SwitchText}" Command="{Binding SwitchCommand}"
-                                            IsEnabled="{Binding SwitchEnabled}"
-                                            Style="{StaticResource AiBtnPrimarySm}"
-                                            HorizontalAlignment="Right" Margin="0,12,0,0"
-                                            Visibility="{Binding Active, Converter={StaticResource InvBoolToVis}}"/>
+                                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,12,0,0">
+                                        <!-- 删除：仅自定义卡显示（内置卡 CanDelete=false 隐藏） -->
+                                        <Button Content="🗑" Command="{Binding DeleteCommand}"
+                                                Style="{StaticResource AiBtnDangerGhostSm}"
+                                                Width="34" Padding="0" Margin="0,0,8,0"
+                                                Visibility="{Binding CanDelete, Converter={StaticResource BoolToVis}}"
+                                                ToolTip="删除自定义引擎卡（内置卡不可删除）"/>
+                                        <Button Content="{Binding SwitchText}" Command="{Binding SwitchCommand}"
+                                                IsEnabled="{Binding SwitchEnabled}"
+                                                Style="{StaticResource AiBtnPrimarySm}"
+                                                Visibility="{Binding Active, Converter={StaticResource InvBoolToVis}}"/>
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </DataTemplate>
@@ -177,7 +194,7 @@
                                 <TextBlock Text="服务模型名" Style="{StaticResource AiFormLabel}"/>
                                 <TextBox Text="{Binding HttpModel, UpdateSourceTrigger=PropertyChanged, TargetNullValue=''}"
                                          Style="{StaticResource AiInput}"
-                                         ToolTip="如 locateanything-3b / Qwen/Qwen2.5-VL-7B-Instruct / llava / claude-sonnet-4-5"/>
+                                         ToolTip="如 locateanything-3b / Qwen/Qwen3-VL-8B-Instruct / Qwen/Qwen3-VL-4B-Instruct / llava"/>
                             </StackPanel>
 
                             <StackPanel Grid.Row="2" Grid.Column="0">
@@ -257,6 +274,12 @@
                             </Border>
                         </UniformGrid>
                     </StackPanel>
+                </Border>
+
+                <!-- 页面底部说明（设计稿：卡参数与自定义卡落盘位置） -->
+                <Border Style="{StaticResource AiCard}" Padding="18,12,18,12" Margin="0,14,0,0">
+                    <TextBlock FontSize="11" Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap"
+                               Text="每张引擎卡独立保存连接参数（协议 / 地址 / 模型名），切换即回填推理参数表单 · 自定义引擎卡落 00_ExeBuild\Data\EngineCards.json（现场数据，不入库）· 内置卡不可删除，自定义卡可删除"/>
                 </Border>
             </StackPanel>
         </ScrollViewer>

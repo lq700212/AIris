@@ -39,7 +39,7 @@ namespace AIris.Core.Model
         /// <summary>截图文件名（Shots\ 下的相对名；空=无截图）。</summary>
         public string ShotFile { get; set; } = "";
 
-        /// <summary>引擎名（LocateAnything-3B / Qwen2.5-VL-7B / Mock 演示）。</summary>
+        /// <summary>引擎名（LocateAnything-3B / Qwen3-VL-8B / 自定义卡名 / Mock 演示）。</summary>
         public string EngineName { get; set; } = "";
 
         /// <summary>语义决策备注（V0.1.7 可选增强：NG 原因归纳，如"漏装"；默认空——

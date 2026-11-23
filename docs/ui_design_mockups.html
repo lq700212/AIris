@@ -744,9 +744,9 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 <!-- ============================================================
      页面 4：检测引擎（对应 EnginePage）
      ============================================================ -->
-<div class="page-cap" data-cap="engine"><b>04 · 检测引擎</b><span class="tag">已落地</span>
-  三引擎卡（许可证直标）｜推理参数（四协议 + 服务地址）｜服务状态 KPI
-  <span class="vnext">vNext</span>「测试连接」结果就地反馈（在线/不可达原因，不用翻日志）
+<div class="page-cap" data-cap="engine"><b>04 · 检测引擎</b><span class="tag">已落地</span><span class="tag plan">vNext 引擎卡扩展</span>
+  四引擎卡（许可证直标 + 每卡独立连接参数）｜推理参数（四协议 + 服务地址）｜服务状态 KPI
+  <span class="vnext">vNext</span>「＋ 添加引擎」自定义接入新模型（落 Data\EngineCards.json，免改代码）·「测试连接」结果就地反馈
 </div>
 <section class="screen" data-page="engine">
   <header class="appbar">
@@ -767,16 +767,17 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 
   <div class="page">
     <div class="pagehead">
-      <div class="h"><span class="t">检测引擎</span><span class="s">Qwen2.5-VL-7B · 已加载</span></div>
+      <div class="h"><span class="t">检测引擎</span><span class="s">Qwen3-VL-8B · 已加载</span></div>
       <span class="sp"></span>
       <div class="acts">
         <button class="btn sec" data-goto="monitor">← 返回监控台</button>
+        <button class="btn sec" onclick="openModal('m-add-engine')"><span class="plus">＋</span>添加引擎</button>
         <button class="btn pri">应用配置</button>
       </div>
     </div>
 
-    <!-- 三引擎卡 -->
-    <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:14px">
+    <!-- 四引擎卡（内置 4 张；自定义引擎卡由页头「＋ 添加引擎」追加，同样 4 列排布） -->
+    <div style="display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px">
       <div class="card">
         <div class="bd">
           <div style="display:flex;align-items:center"><span style="font-size:14px;font-weight:700">Mock 演示引擎</span>
@@ -785,6 +786,7 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
           <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7">
             开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则<br/>切换需重启引擎（未接入时回落 Mock 演示）
           </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">服务参数：内置 · 无 HTTP 依赖</div>
         </div>
       </div>
       <div class="card">
@@ -795,19 +797,41 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
           <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7">
             开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则<br/>切换需重启引擎（未接入时回落 Mock 演示）
           </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">服务参数：custom · locateanything-3b</div>
+          <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn pri sm">切换到此引擎</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="bd">
+          <div style="display:flex;align-items:center"><span style="font-size:14px;font-weight:700">Qwen2.5-VL-7B</span>
+            <span style="flex:1"></span><span class="chip mut">可切换</span></div>
+          <div style="margin-top:8px"><span class="chip ok">许可证：Apache 2.0 · 上一代对照</span></div>
+          <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7">
+            开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则<br/>BF16 约 14 GB · 16 GB 卡可跑（不接受量化的现场保留）
+          </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">服务参数：openai · qwen2.5-vl-7b</div>
           <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn pri sm">切换到此引擎</button></div>
         </div>
       </div>
       <div class="card" style="border-color:rgba(249,115,22,.5)">
         <div class="bd">
-          <div style="display:flex;align-items:center"><span style="font-size:14px;font-weight:700">Qwen2.5-VL-7B</span>
+          <div style="display:flex;align-items:center"><span style="font-size:14px;font-weight:700">Qwen3-VL-8B</span>
             <span style="flex:1"></span><span class="chip ok"><span class="d"></span>当前引擎</span></div>
-          <div style="margin-top:8px"><span class="chip ok">许可证：Apache 2.0 · 商用推荐</span></div>
+          <div style="margin-top:8px"><span class="chip ok">许可证：Apache 2.0 · 商用主力</span></div>
           <div style="font-size:11px;color:var(--muted);margin-top:8px;line-height:1.7">
-            开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则<br/>切换需重启引擎（未接入时回落 Mock 演示）
+            开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则<br/>FP8 权重约 9 GB · grounding/OCR 代际强化
           </div>
+          <div style="font-size:10.5px;color:var(--muted);margin-top:8px">服务参数：openai · Qwen/Qwen3-VL-8B-Instruct</div>
           <div style="display:flex;justify-content:flex-end;margin-top:10px"><button class="btn pri sm">切换到此引擎</button></div>
         </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="bd tight" style="font-size:11px;color:var(--muted)">
+        每张引擎卡独立保存连接参数（协议 / 地址 / 模型名），切换即回填推理参数表单 ·
+        自定义引擎卡落 <span class="code">00_ExeBuild\Data\EngineCards.json</span>（现场数据，不入库）·
+        内置卡不可删除，自定义卡可删除
       </div>
     </div>
 
@@ -825,7 +849,7 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
             </select></div>
           <div><span class="fl">API Key（本地服务留空）</span><input class="input" placeholder="本地部署留空即可"/></div>
           <div><span class="fl">HTTP 推理服务地址（接入真实引擎后生效）</span><input class="input" value="http://127.0.0.1:8000"/></div>
-          <div><span class="fl">服务模型名</span><input class="input" value="qwen2.5-vl-7b"/></div>
+          <div><span class="fl">服务模型名</span><input class="input" value="Qwen/Qwen3-VL-8B-Instruct"/></div>
           <div><span class="fl">解码模式（LocateAnything PBD 三档 · 仅自研服务端）</span>
             <select class="input"><option>hybrid（MTP 优先）</option><option>fast（MTP）</option><option>slow（AR）</option></select></div>
           <div><span class="fl">批处理大小（自研服务端）</span><input class="input" value="8"/></div>
@@ -844,10 +868,10 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
       <div class="hd"><span class="t">服务状态</span><span class="sp"></span><span class="s">只读 · 随运行自动刷新</span></div>
       <div class="bd">
         <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:14px">
-          <div class="kpi"><div class="k">显存占用</div><div class="v sm">约 15 / 16 GB</div></div>
-          <div class="kpi"><div class="k">单帧耗时</div><div class="v">412 ms</div></div>
+          <div class="kpi"><div class="k">显存占用</div><div class="v sm">约 12 / 16 GB</div></div>
+          <div class="kpi"><div class="k">单帧耗时</div><div class="v">486 ms</div></div>
           <div class="kpi"><div class="k">累计调用</div><div class="v pri">1 268</div></div>
-          <div class="kpi"><div class="k">当前引擎</div><div class="v sm">Qwen2.5-VL-7B</div></div>
+          <div class="kpi"><div class="k">当前引擎</div><div class="v sm">Qwen3-VL-8B</div></div>
         </div>
       </div>
     </div>
@@ -1143,6 +1167,34 @@ select.input{appearance:none;background-image:linear-gradient(45deg,transparent 
 </section>
 
 </div><!-- /stage-wrap -->
+
+<!-- ================= 弹窗：添加检测引擎（自定义模型接入） ================= -->
+<div class="modal-mask" id="m-add-engine">
+  <div class="modal">
+    <div class="mh"><span class="ic">＋</span><span class="t">添加检测引擎</span><span class="s">接入新的视觉模型</span>
+      <button class="x" onclick="closeModal('m-add-engine')">✕</button></div>
+    <div class="mb">
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div><span class="fl">引擎名称（显示在卡片上）</span><input class="input" placeholder="如：Qwen3-VL-4B"/></div>
+        <div><span class="fl">许可证说明</span><input class="input" value="许可证：Apache 2.0 · 自定义接入"/></div>
+        <div><span class="fl">推理协议（选对部署形态的信封）</span>
+          <select class="input">
+            <option>OpenAI 兼容（vLLM / llama-server · 推荐）</option>
+            <option>自研 FastAPI 契约（/detect · 框直出）</option>
+            <option>Ollama 原生（/api/chat）</option>
+            <option>Anthropic（云端，不适用离线）</option>
+          </select></div>
+        <div><span class="fl">API Key（本地服务留空）</span><input class="input" placeholder="本地部署留空即可"/></div>
+        <div><span class="fl">HTTP 推理服务地址</span><input class="input" value="http://127.0.0.1:8000"/></div>
+        <div><span class="fl">服务模型名</span><input class="input" placeholder="如：Qwen/Qwen3-VL-4B-Instruct"/></div>
+      </div>
+      <div class="fh">保存后追加为新引擎卡：可「测试连接」验证后直接切换 ·
+        自定义卡落 Data\EngineCards.json，内置卡不可删除</div>
+    </div>
+    <div class="mf"><button class="btn sec" onclick="closeModal('m-add-engine')">取消</button>
+      <button class="btn pri">添加引擎</button></div>
+  </div>
+</div>
 
 <!-- ================= 弹窗：新建配方（两步向导） ================= -->
 <div class="modal-mask" id="m-new">

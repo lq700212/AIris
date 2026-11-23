@@ -6,20 +6,19 @@ namespace AIris.Core.Model
     /// </summary>
     public class EngineConfig
     {
-        /// <summary>当前引擎 id（mock / locateanything-http / qwen-vl-http，见 EngineRegistry）。</summary>
+        /// <summary>当前引擎 id（mock / locateanything-http / qwen-vl-http / qwen3-vl-http / custom-xxxxxxxx，见 EngineRegistry）。</summary>
         public string ActiveEngineId { get; set; } = "mock";
 
         /// <summary>推理服务地址（FastAPI 常驻服务 / vLLM / llama-server / Ollama，如 http://127.0.0.1:8000）。</summary>
         public string HttpBaseUrl { get; set; } = "";
 
-        /// <summary>HTTP 服务模型名（服务端路由用，如 locateanything-3b / qwen2.5-vl-7b / llava）。</summary>
+        /// <summary>HTTP 服务模型名（服务端路由用，如 Qwen/Qwen3-VL-8B-Instruct / qwen2.5-vl-7b / locateanything-3b）。</summary>
         public string HttpModel { get; set; } = "";
 
         /// <summary>
         /// 推理协议（V0.1.7 沉库 Kaleidoscope.Infer 后可切）：custom=自研 /detect 契约（默认）；
         /// openai=OpenAI 兼容（vLLM/llama.cpp/LMDeploy）；anthropic=Anthropic /v1/messages；
-        /// ollama=Ollama 原生 /api/chat。默认按引擎：locateanything=custom、qwen-vl=openai
-        /// （EngineRegistry 建引擎时注入初值；用户可改下拉覆盖）。
+        /// ollama=Ollama 原生 /api/chat。默认按引擎卡（EngineRegistry 建引擎时注入初值；用户可改下拉覆盖）。
         /// </summary>
         public string Protocol { get; set; } = "custom";
 
