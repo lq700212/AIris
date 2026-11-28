@@ -6,10 +6,10 @@
   │ 设备列表 236  │ 连接参数卡：相机IP(*) / 端口(130) / 曝光(*)             │
   │ align-self:   │            光源亮度滑块(*) / MES 地址(*)                │
   │ start         │            ── 分隔 ──                                  │
-  │ 每行=状态点   │            4 个复选框 2×2（框左字右，KxCheckBox 形态）  │
-  │ +名称         ├────────────────────────────────────────────────────────┤
-  │ 在线绿/离线灰 │ Mock 说明条 + [采集测试帧]                              │
-  │ /未配置橙     │                                                        │
+  │ 每行=状态点   │ [Mock 数据模式提示条]（仅 MockMode=True）                │
+  │ +名称         │ 连接参数卡：相机类型 / IP / RTSP 端口 / 通道 / 曝光      │
+  │ 在线绿/离线灰 ├────────────────────────────────────────────────────────┤
+  │ /未配置橙     │ 保存即应用说明 + [采集测试帧]                            │
   └──────────────┴────────────────────────────────────────────────────────┘
 
   vNext 落地（2026-11-23 整改）：
@@ -18,10 +18,16 @@
   · 左卡 align-self:start 不再撑满整列（旧版底部大片空盒）；
   · 表单按设计稿重排：首行 IP+端口(130)+曝光，第二行滑块+MES，复选框区 2×2；
   · 滑块用宿主 AiSlider（6px 药丸轨道 + 主→粉渐变 + 16px 圆钮）。
+  2026-11-28 收口：相机类型只保留 RTSP / 海康 GigE 两档真实设备；
+  「Mock 合成画面」已收口为顶栏「Mock 数据」全局开关（相机 + 引擎一起切演示数据），
+  MockMode 期间本页参数照常保存，但相机保持合成画面、关闭 Mock 后生效。
 -->
 <UserControl x:Class="AIris.WPF.Views.SettingsPage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="BoolToVis"/>
+    </UserControl.Resources>
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>
@@ -123,8 +129,21 @@
                 </ListBox>
             </Border>
 
-            <!-- ===== 右：参数卡 + 底部动作条 ===== -->
+            <!-- ===== 右：Mock 提示条 + 参数卡 + 底部动作条 ===== -->
             <StackPanel Grid.Column="2">
+                <!-- Mock 数据模式提示条：参数可编辑可保存，但相机保持合成画面（关闭 Mock 后生效） -->
+                <Border Background="{DynamicResource ThemeWarnDim}" CornerRadius="10"
+                        Padding="14,9" Margin="0,0,0,12"
+                        Visibility="{Binding IsMockMode, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Mock 数据模式" FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ThemeWarn}" VerticalAlignment="Center"/>
+                        <TextBlock Text="相机当前使用合成画面；下方真实相机参数可照常保存，关闭顶栏「Mock 数据」后立即生效。"
+                                   FontSize="11" Foreground="{DynamicResource ThemeWarn}" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
                 <Border Style="{StaticResource AiCard}" Padding="18,14,18,16">
                     <StackPanel>
                         <Grid>
@@ -143,8 +162,7 @@
                             <StackPanel Grid.Column="0">
                                 <TextBlock Text="相机类型" Style="{StaticResource AiFormLabel}"/>
                                 <ComboBox SelectedIndex="{Binding CameraKindIndex}" Style="{StaticResource AiCombo}"
-                                          ToolTip="Mock=合成画面（演示）；RTSP=网络相机（安格华等）；GigE=海康 SDK">
-                                    <ComboBoxItem Content="Mock 合成画面"/>
+                                          ToolTip="RTSP=网络相机（安格华等）；GigE=海康 SDK。Mock 演示请用顶栏「Mock 数据」开关">
                                     <ComboBoxItem Content="RTSP 网络相机"/>
                                     <ComboBoxItem Content="海康 GigE 相机"/>
                                 </ComboBox>
@@ -248,7 +266,7 @@
                 <!-- 底部动作条（保存即热切换说明 + 采集测试帧） -->
                 <Border Style="{StaticResource AiCard}" Margin="0,14,0,0" Padding="14,10">
                     <Grid>
-                        <TextBlock Text="保存即应用：相机类型可随时切换（Mock ↔ RTSP），不用重启程序"
+                        <TextBlock Text="保存即应用：相机类型可随时切换（RTSP ↔ GigE），不用重启程序；Mock 演示用顶栏「Mock 数据」开关"
                                    FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
                                    VerticalAlignment="Center"/>
                         <Button Content="采集测试帧" Command="{Binding TestCameraCommand}"

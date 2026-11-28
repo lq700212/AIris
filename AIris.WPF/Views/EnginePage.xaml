@@ -3,7 +3,9 @@
 
   ┌ 页头：🧠 检测引擎 · Qwen3-VL-8B 已加载   [← 返回监控台] [＋ 添加引擎] [应用配置] ┐
   ├──────────────────────────────────────────────────────────────────────┤
-  │ 四引擎卡（4 列等分）：Mock / LocateAnything-3B / Qwen2.5-VL-7B / Qwen3-VL-8B │
+  │ [Mock 数据模式提示条]（仅 MockMode=True 时显示）                          │
+  │ 引擎卡（4 列等分，超过 4 张自动换行）：LocateAnything-3B /               │
+  │ Qwen2.5-VL-7B / Qwen3-VL-8B / Qwen2.5-VL-3B（Ollama 本地）              │
   │  · 许可证直接标在卡上（研究许可红胶囊，Apache 绿胶囊）                      │
   │  · 每卡独立连接参数（协议/地址/模型名），切换即回填推理参数表单             │
   │  · 「＋ 添加引擎」追加自定义卡（可删除），接新模型零改代码                  │
@@ -14,6 +16,9 @@
   │ 服务状态卡（4 KPI）：显存 / 单帧耗时 / 累计调用 / 当前引擎                  │
   └──────────────────────────────────────────────────────────────────────┘
   vNext 落地（2026-11-23）：引擎卡扩展 = Qwen3-VL-8B 内置卡 + 自定义引擎卡（添加/删除/独立参数）。
+  2026-11-28：新增 Qwen2.5-VL-3B（Ollama 本地）内置卡——低配开发机先验链路（落地指南 §2.9.5）。
+  2026-11-28 收口：Mock 不再是引擎卡（也不是相机类型），统一由顶栏「Mock 数据」全局开关控制；
+  本页只列真实模型卡，MockMode 期间顶部提示条明示"真实卡暂不生效"。
 -->
 <UserControl x:Class="AIris.WPF.Views.EnginePage"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
@@ -51,7 +56,21 @@
         <ScrollViewer Grid.Row="1" VerticalScrollBarVisibility="Auto" HorizontalScrollBarVisibility="Disabled"
                       Padding="0,0,4,0">
             <StackPanel>
-                <!-- ===== 引擎卡（4 列等分；自定义卡追加在末尾） ===== -->
+                <!-- ===== Mock 数据模式提示条（仅 MockMode=True） =====
+                     说清三件事：当前是演示数据、真实卡暂不生效、点卡即退出 Mock。 -->
+                <Border Background="{DynamicResource ThemeWarnDim}" CornerRadius="10"
+                        Padding="14,9" Margin="0,0,0,12"
+                        Visibility="{Binding IsMockMode, Converter={StaticResource BoolToVis}}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Text="Mock 数据模式" FontSize="11.5" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource ThemeWarn}" VerticalAlignment="Center"/>
+                        <TextBlock Text="相机与引擎均为演示数据；下方真实引擎卡暂不生效。点任意卡「切换到此引擎」会关闭 Mock 并切回真实设备。"
+                                   FontSize="11" Foreground="{DynamicResource ThemeWarn}" Margin="10,0,0,0"
+                                   VerticalAlignment="Center" TextWrapping="Wrap"/>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== 引擎卡（4 列等分；自定义卡追加在末尾，超过 4 张自动换行） ===== -->
                 <ItemsControl ItemsSource="{Binding Cards}">
                     <ItemsControl.ItemsPanel>
                         <ItemsPanelTemplate><UniformGrid Columns="4"/></ItemsPanelTemplate>
@@ -67,11 +86,7 @@
                                 <Border.Style>
                                     <Style TargetType="Border" BasedOn="{StaticResource AiCard}">
                                         <Style.Triggers>
-                                            <!-- 回落执行中：警示描边（选中引擎未接入，实际由 Mock 兜底） -->
-                                            <DataTrigger Binding="{Binding Fallback}" Value="True">
-                                                <Setter Property="BorderBrush" Value="{DynamicResource ThemeWarn}"/>
-                                            </DataTrigger>
-                                            <!-- 当前引擎：主色描边焦点卡 -->
+                                            <!-- 当前引擎：主色描边焦点卡（Mock 数据模式下不高亮任何真实卡） -->
                                             <DataTrigger Binding="{Binding Active}" Value="True">
                                                 <Setter Property="BorderBrush" Value="{DynamicResource ThemePrimary}"/>
                                             </DataTrigger>
@@ -83,15 +98,11 @@
                                         <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="Bold"
                                                    Foreground="{DynamicResource ThemeTextFg}"
                                                    TextTrimming="CharacterEllipsis" Margin="0,0,8,0"/>
-                                        <!-- 状态胶囊：当前引擎=绿 / 回落执行中=黄 / 可切换=灰 -->
+                                        <!-- 状态胶囊：当前引擎=绿 / 可切换=灰 -->
                                         <ContentControl HorizontalAlignment="Right" Content="{Binding StateText}">
                                             <ContentControl.Style>
                                                 <Style TargetType="ContentControl" BasedOn="{StaticResource AiChipMut}">
                                                     <Style.Triggers>
-                                                        <DataTrigger Binding="{Binding Fallback}" Value="True">
-                                                            <Setter Property="Background" Value="{DynamicResource ThemeWarnDim}"/>
-                                                            <Setter Property="Foreground" Value="{DynamicResource ThemeWarn}"/>
-                                                        </DataTrigger>
                                                         <DataTrigger Binding="{Binding Active}" Value="True">
                                                             <Setter Property="Background" Value="{DynamicResource ThemeOkDim}"/>
                                                             <Setter Property="Foreground" Value="{DynamicResource ThemeOk}"/>

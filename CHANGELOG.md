@@ -2,6 +2,93 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.18（2026-11-28）Mock 收口为全局开关 + 顶栏状态胶囊真实化
+
+### 一、Mock 收口：两处独立 Mock 选项 → 顶栏「Mock 数据」一键全局切换
+
+- **问题**：Mock 原先分散在「引擎页 Mock 引擎卡」和「设备页相机类型 = Mock 合成画面」两处，
+  且可各自独立选中，导致"引擎是 Mock、相机是 RTSP"这类混合态难以解释；用户要求收拢为一处。
+- **新增全局 Mock 数据模式**（`[App] MockMode`）：ON = 相机与检测引擎**同时**使用内置演示数据，
+  顶栏状态胶囊旁新增「Mock 数据」按钮作为唯一开关（激活时按钮高亮 + 文案带「· 开」）。
+  - 切换走 `ServiceHub.SetMockMode(bool)`：持久化 INI → 相机/引擎热切换（不重启）→
+    广播 `MockModeChanged` 通知各页刷新；关闭时按 INI 保存的真实相机 + 真实引擎卡恢复。
+  - 二次确认框写明影响范围与"真实配置会保留、关闭后自动恢复"。
+- **引擎页删除 Mock 卡**：`EngineRegistry.Builtin` 只剩 4 张真实模型卡
+  （LocateAnything-3B / Qwen2.5-VL-7B / Qwen3-VL-8B / Qwen2.5-VL-3B）；
+  `Create("mock")` 仅为旧 INI 兼容保留（返回 Mock 引擎，不生成卡片）。
+  新增橙色提示条：MockMode 期间明示"真实卡暂不生效"；点任意卡「切换到此引擎」自动退出 Mock。
+- **设备页删除 Mock 相机选项**：相机类型下拉只剩 RTSP / 海康 GigE 两档；
+  `CameraKind` 归一化（旧 `mock`/未知值 → `rtsp`），Mock 语义完全由 `[App] MockMode` 承载。
+  MockMode 期间相机参数照常保存，但保持合成画面，关闭 Mock 后生效（提示条明示）。
+- **监控台演示控制条按 MockMode 显隐**：真机 + 真实引擎时驱动 MockScene 没有意义，
+  会误导成"点一下真机画面会变"；非 Mock 模式隐藏整条，并保留既有"真实引擎失败自动回落 Mock"兜底。
+- **旧配置首次迁移**（只发生一次）：`CameraKind=mock` 或 `ActiveEngineId=mock` 视为原本在演示态
+  → 自动写 `MockMode=ON`；`ActiveEngineId=mock` 迁移到商用主力卡 `qwen3-vl-http`。
+
+### 二、顶栏状态胶囊真实化（修复"永远绿色在线"）
+
+- **根因**：`MainWindow.xaml` 相机胶囊文本 `Text="相机在线"` 与两个圆点 `Fill="#FFB6F0CE"`
+  全部写死；引擎胶囊文本虽绑 `EngineIndicator` 会变，圆点颜色却始终绿色。
+- **修复**：文本与圆点颜色都绑运行态——
+  - 引擎：`EngineIndicator` + `EngineStatus`（ok=在线绿 / warn=回落 Mock 或 Mock 演示橙 / off=未接入红）；
+  - 相机：`CameraIndicator` + `CameraStatus`（ok=在线绿 / warn=Mock 橙 / off=离线红）。
+  - 新增 `DispatcherTimer`（1s）轮询 `Monitor.Camera.IsConnected` + `Monitor.Engine.IsLoaded`：
+    相机断流/重连、引擎探活/切换都能在 1s 内反映，不依赖单一 StateChanged 事件。
+- 颜色用顶栏专用字面值（顶栏是固定橙粉渐变彩底，浅深主题下一致）；页面内控件仍一律走 `Theme*` 键。
+
+### 三、实测验证（物理实点 + 截图目检）
+
+- 启动（MockMode=ON）：顶栏「引擎 Mock」「相机 Mock」双橙 + 按钮高亮；演示控制条可见；
+  「一键摆齐」→ 工步 1-4 连续 OK、工步 5 判定中，日志与截图存档正常。
+- 点「Mock 数据」→ 确认「关闭」：顶栏变「引擎 回落 Mock」橙 +「相机 在线」绿
+  （RTSP 192.168.1.188:554 真机画面 2592×1944 实时显示），演示控制条隐藏。
+- 引擎页点 Qwen2.5-VL-3B「切换到此引擎」：确认框含 Mock 提示 → 确认后自动退出 Mock，
+  引擎变绿「引擎 在线」，卡片高亮 + 参数回填（Ollama / 11434 / qwen2.5vl:3b），相机红「离线」（重连中）。
+- 重启程序：MockMode=ON 持久化生效，直接回到演示态。测试后 INI 已恢复
+  （MockMode=ON + ActiveEngineId=qwen3-vl-http）。
+
+## V0.1.17（2026-11-28）内置 Qwen2.5-VL-3B（Ollama 本地）引擎卡 + 修复真实模型两处链路 bug
+
+### 一、新增内置引擎卡：Qwen2.5-VL-3B（Ollama 本地先验）
+
+- `EngineRegistry.Builtin` 增加第五张卡：`qwen25vl-3b-ollama`，显示名「Qwen2.5-VL-3B」，
+  协议 `ollama`（原生 `/api/chat`）、地址 `http://127.0.0.1:11434`、模型名 `qwen2.5vl:3b`、
+  超时 **120000ms**（冷启动含模型加载约 27s，默认 5000ms 必超时）。
+- 用途：4GB 显存开发机/办公机的**链路先验**（落地指南 §2.9.5），不是产线精度方案；
+  卡片许可证胶囊按 Apache 2.0 绿标。
+- 引擎页卡列 5 张（4 列等分，第 5 张换行），页头 ASCII 布局图与 VM 注释同步。
+
+### 二、修复真实模型两处「接不通 / 判不出」的链路 bug（2026-11-28 实测）
+
+- **`InferTransportBase`：HttpClient.Timeout 二次修改异常**——.NET Framework 的 HttpClient
+  在发出过第一个请求后再设置 `Timeout` 会抛 `InvalidOperationException`（"此实例已经启动了
+  一个或多个请求。只能在发送第一个请求之前修改属性"）。旧实现每次请求都改 Timeout，
+  而引擎页调用顺序恰好是「先 ProbeAsync（GET /api/tags）→ 再 DetectAsync（POST /api/chat）」，
+  **第二个请求必炸**，表现为"探活在线、检测永远降级 Mock"。改为
+  `HttpClient.Timeout = InfiniteTimeSpan` + 每请求 `CancellationTokenSource.CancelAfter(ep.TimeoutMs)`
+  （探活仍从紧 ≤3s）。
+- **`BoxParser`：JSON `bbox_2d` 丢 `label`**——旧实现 `BuildBox(..., "")` 把所有真实模型框的
+  Label 置空，而 `JudgeEngine.CountMatched` 明确跳过空 Label 框（无法确认框属于哪个零件），
+  结果是**真实模型即使出框正确也永远判成"缺件 NG"**。改为在 `bbox_2d` 所在 JSON 对象片段内
+  取 `label`（`label` 写在 `bbox_2d` 前后都兼容，只扫当前对象不串相邻框）。
+
+### 三、实测验证（本机 Ollama `qwen2.5vl:3b`，GTX 1650 Ti 4GB / 16GB）
+
+- `InferClient` 临时探针：`/api/tags` 探活 35ms → `/api/chat` 800×600 合成图检测 22.1s，
+  解析出 `blue rectangle (257,194)-(520,394)`，`LABEL_PARSED=True`。
+- 引擎页实点：新卡「切换到此引擎」→ 页头「Qwen2.5-VL-3B · 已就绪」+ 主色描边 + 当前引擎胶囊；
+  协议/地址/模型名/超时正确回填；「测试连接」绿色胶囊「探活在线 · 4ms」。
+- 监控台实点：真实引擎出框后信息行显示 `Qwen2.5-VL-3B 39276ms`，**不再回落 Mock**；
+  2592×1944 RTSP 真机帧单帧约 39s（3B 性能现实，产线仍按 §2.9.6/§2.9.7 选型）。
+- 测试后 `ActiveEngineId` 已还原为 `mock`（运行数据不改，卡参数与卡片保留）。
+
+### 四、文档同步
+
+- `docs/AIris落地指南.md`：§2.4/§2.8 内置卡数 4→5；§2.9.1 追加 2026-11-28 实测行；
+  §2.9.2 增加 Qwen2.5-VL-3B（GGUF 3.2GB，4GB 唯一可跑）门槛行；§2.9.5 重写为
+  `qwen2.5vl:3b` 实测（拉取/内置卡/手填参数/耗时/能验不能验）。
+- `README.md`：引擎可插拔条目补 Qwen2.5-VL-3B（Ollama 本地先验）。
+
 ## V0.1.16（2026-11-28）RTSP 网络相机接入：复用 Kaleidoscope 拉流 + 相机配置界面改造 + 保存即热切换
 
 ### 一、相机接入：新增 RTSP 网络相机源（复用库，不另造轮子）

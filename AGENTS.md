@@ -87,8 +87,12 @@
 | MockCameraSource | `AIris.Core\Camera\MockCameraSource.cs` | 按 MockScene 状态 GDI+ 合成俯拍画面（垫板矩形/散热器/螺丝圆点），25fps 线程 |
 | MockDetectionEngine | `AIris.Core\Detection\MockDetectionEngine.cs` | 按 MockScene 状态返回归一化框，模拟"即指即检" |
 
-- 运行监控台的演示控制条（下一步/装上零件/NG 模拟）驱动 MockScene，链条：
+- 运行监控台的演示控制条（放上一个/拿走一个/一键摆齐/重检本步）驱动 MockScene，链条：
   画面合成 → 引擎出框 → JudgeEngine 判定（IoU×数量×稳定帧）→ WorkstepEngine 推进 → 审计落档。
+- **唯一 Mock 开关 = 顶栏「Mock 数据」按钮**（2026-11-28 收口）：`ServiceHub.MockMode` ↔
+  INI `[App] MockMode`，ON 时相机与引擎**同时**切演示数据、演示控制条才显示；
+  OFF 时按设备页/引擎页配置恢复真实设备（真实不可达时按既有语义如实显示回落/离线）。
+  **引擎卡列与相机类型下拉都不再有 Mock 选项**，别再把 Mock 加回这两处。
 - 真机接入时：相机实现 `ICameraSource`（或包一层 Kaleidoscope 相机适配器）、检测实现
   `IDetectionEngine`，Mock 三件套不删（演示/回归一直要用）。
 

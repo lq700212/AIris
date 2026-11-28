@@ -302,8 +302,11 @@
             </Grid>
         </Grid>
 
-        <!-- ===== 底部演示控制条（Mock 三件套驱动 · 独立整宽卡） ===== -->
-        <Border Grid.Row="1" Style="{StaticResource AiCard}" Padding="14,10" Margin="0,14,0,0">
+        <!-- ===== 底部演示控制条（仅 Mock 数据模式显示 · 独立整宽卡） =====
+             真机 + 真实引擎时驱动 MockScene 没有意义，会误导成"点一下真机画面会变"，
+             故按 IsMockMode 显隐（顶栏「Mock 数据」开关驱动）。 -->
+        <Border Grid.Row="1" Style="{StaticResource AiCard}" Padding="14,10" Margin="0,14,0,0"
+                Visibility="{Binding IsMockMode, Converter={StaticResource BoolToVis}}">
             <Grid>
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                     <TextBlock Text="演示控制" FontSize="11" FontWeight="SemiBold"
@@ -320,7 +323,7 @@
                     <Button Content="重检本步" Command="{Binding RecheckCommand}"
                             Style="{StaticResource AiBtnPrimarySm}" Margin="8,0,0,0"/>
                 </StackPanel>
-                <TextBlock Text="Mock 三件套驱动 · 真机接入后本条隐藏" FontSize="10.5"
+                <TextBlock Text="仅 Mock 数据模式可用 · 顶栏「Mock 数据」可随时开关" FontSize="10.5"
                            Foreground="{DynamicResource ThemeTextMuted}" HorizontalAlignment="Right"
                            VerticalAlignment="Center"/>
             </Grid>

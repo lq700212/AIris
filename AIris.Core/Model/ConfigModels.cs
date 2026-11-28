@@ -2,12 +2,13 @@ namespace AIris.Core.Model
 {
     /// <summary>
     /// 检测引擎配置（MainSetting.ini [Engine] 节；检测引擎页读写）。
-    /// 大模型未接入时 ActiveEngineId = mock；接入真实服务后填 HttpBaseUrl/HttpModel。
+    /// 默认指向商用主力卡 Qwen3-VL-8B（qwen3-vl-http）；Mock 演示由全局 [App] MockMode 控制，
+    /// 不再用 ActiveEngineId=mock 表达（EngineRegistry.Create("mock") 仅为旧 INI 兼容保留）。
     /// </summary>
     public class EngineConfig
     {
-        /// <summary>当前引擎 id（mock / locateanything-http / qwen-vl-http / qwen3-vl-http / custom-xxxxxxxx，见 EngineRegistry）。</summary>
-        public string ActiveEngineId { get; set; } = "mock";
+        /// <summary>当前引擎 id（locateanything-http / qwen-vl-http / qwen3-vl-http / qwen25vl-3b-ollama / custom-xxxxxxxx，见 EngineRegistry）。</summary>
+        public string ActiveEngineId { get; set; } = "qwen3-vl-http";
 
         /// <summary>推理服务地址（FastAPI 常驻服务 / vLLM / llama-server / Ollama，如 http://127.0.0.1:8000）。</summary>
         public string HttpBaseUrl { get; set; } = "";
@@ -50,12 +51,13 @@ namespace AIris.Core.Model
         // —— 相机（对位设计稿 settings 页相机参数） ——
 
         /// <summary>
-        /// 相机类型（决定 ServiceHub 装配哪个 ICameraSource）：
-        ///   mock = Mock 合成画面（默认，演示/无相机时用）
-        ///   rtsp = RTSP 网络相机（安格华等 IP 相机，走 OpenCV VideoCapture 拉流）
+        /// 相机类型（决定 ServiceHub 装配哪个 ICameraSource；只认真实设备两档）：
+        ///   rtsp = RTSP 网络相机（安格华等 IP 相机，走 OpenCV VideoCapture 拉流；默认）
         ///   hik  = 海康 GigE 工业相机（SDK 桩，待真机接入）
+        /// Mock 合成画面不占本字段——由全局 [App] MockMode 控制（顶栏「Mock 数据」开关），
+        /// 旧版 "mock" 值读入时归一到 rtsp（AppSettings.NormalizeCameraKind）。
         /// </summary>
-        public string CameraKind { get; set; } = "mock";
+        public string CameraKind { get; set; } = "rtsp";
 
         public string CameraIp { get; set; } = "192.168.1.64";
 

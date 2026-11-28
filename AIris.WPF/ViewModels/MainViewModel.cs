@@ -1,6 +1,8 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Windows.Input;
+using System.Windows.Threading;
 
 namespace AIris.WPF.ViewModels
 {
@@ -29,6 +31,12 @@ namespace AIris.WPF.ViewModels
 
             ToggleThemeCommand = new RelayCommand(() => Services.ThemeService.Toggle());
             NavigateCommand = new RelayCommand(p => Go(p as string));
+            ToggleMockCommand = new RelayCommand(ToggleMock);
+
+            // 顶栏状态胶囊每秒读一次真实运行态：相机 IsConnected 可能在运行中因断流/重连变化，
+            // 引擎 IsLoaded 也可能因探活/切换变化——只靠 StateChanged 事件会漏掉相机侧变化。
+            _statusTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _statusTimer.Tick += (s, e) => RefreshRuntimeStatus();
         }
 
         /// <summary>全部页面（按 dock 顺序）。</summary>
@@ -61,8 +69,27 @@ namespace AIris.WPF.ViewModels
         /// <summary>顶栏明暗主题切换。</summary>
         public ICommand ToggleThemeCommand { get; }
 
+        /// <summary>顶栏「Mock 数据」全局开关（相机 + 引擎一起切演示数据）。</summary>
+        public ICommand ToggleMockCommand { get; }
+
+        private readonly DispatcherTimer _statusTimer;
+
+        private bool _mockMode;
+        /// <summary>当前是否 Mock 数据模式（ServiceHub.MockMode 的 UI 镜像）。</summary>
+        public bool MockMode
+        {
+            get { return _mockMode; }
+            private set
+            {
+                if (SetProperty(ref _mockMode, value)) OnPropertyChanged(nameof(MockButtonText));
+            }
+        }
+
+        /// <summary>顶栏 Mock 按钮文案：开启时带"· 开"，一眼看出当前是演示数据。</summary>
+        public string MockButtonText { get { return _mockMode ? "Mock 数据 · 开" : "Mock 数据"; } }
+
         private string _engineIndicator = "引擎 —";
-        /// <summary>顶栏引擎态胶囊文本：在线 / 回落 Mock / 未接入。
+        /// <summary>顶栏引擎态胶囊文本：在线 / 回落 Mock / Mock 演示 / 未接入。
         /// 不能写死"引擎 在线"——切到未接入的引擎后，顶栏会与引擎页状态自相矛盾。</summary>
         public string EngineIndicator
         {
@@ -70,37 +97,137 @@ namespace AIris.WPF.ViewModels
             private set { SetProperty(ref _engineIndicator, value); }
         }
 
+        private string _engineStatus = "off";
+        /// <summary>顶栏引擎圆点状态：ok=绿 / warn=橙（Mock 或回落）/ off=红（未接入）。
+        /// XAML 按此上色（不写死颜色，颜色键见 Theme*）。</summary>
+        public string EngineStatus
+        {
+            get { return _engineStatus; }
+            private set { SetProperty(ref _engineStatus, value); }
+        }
+
+        private string _cameraIndicator = "相机 —";
+        /// <summary>顶栏相机态胶囊文本：在线 / 离线 / Mock 演示。</summary>
+        public string CameraIndicator
+        {
+            get { return _cameraIndicator; }
+            private set { SetProperty(ref _cameraIndicator, value); }
+        }
+
+        private string _cameraStatus = "off";
+        /// <summary>顶栏相机圆点状态：ok=绿 / warn=橙（Mock）/ off=红（离线）。</summary>
+        public string CameraStatus
+        {
+            get { return _cameraStatus; }
+            private set { SetProperty(ref _cameraStatus, value); }
+        }
+
         /// <summary>
         /// 运行时装配后挂订阅（ServiceHub.Install 末尾调用一次）：
-        /// 顶栏引擎态随运行/切换刷新。构造器里 ServiceHub.Monitor 尚未装配，故订阅放在这里。
+        /// 顶栏引擎/相机态随运行、切换、Mock 模式刷新。构造器里 ServiceHub.Monitor 尚未装配，故订阅放在这里。
         /// </summary>
         public void AttachRuntime()
         {
             var monitor = Services.ServiceHub.Monitor;
             if (monitor == null) return;
-            monitor.StateChanged += (s, e) => RefreshEngineIndicator();
-            RefreshEngineIndicator();
+
+            monitor.StateChanged += (s, e) => RefreshRuntimeStatus();
+            Services.ServiceHub.MockModeChanged += OnMockModeChanged;
+
+            MockMode = Services.ServiceHub.MockMode;
+            RefreshRuntimeStatus();
+            _statusTimer.Start();
         }
 
-        /// <summary>按当前引擎实例刷新顶栏胶囊；StateChanged 可能来自检测线程 → 调度回 UI 线程。</summary>
-        private void RefreshEngineIndicator()
+        /// <summary>Mock 模式切换通知（可能来自非 UI 线程）→ 调度回 UI 线程刷新按钮与胶囊。</summary>
+        private void OnMockModeChanged(bool on)
         {
             var app = System.Windows.Application.Current;
             if (app == null || app.Dispatcher.CheckAccess())
             {
-                ApplyEngineIndicator();
+                MockMode = on;
+                ApplyRuntimeStatus();
                 return;
             }
-            app.Dispatcher.BeginInvoke(new System.Action(ApplyEngineIndicator));
+            app.Dispatcher.BeginInvoke(new Action(() => { MockMode = on; ApplyRuntimeStatus(); }));
         }
 
-        private void ApplyEngineIndicator()
+        /// <summary>刷新顶栏胶囊；StateChanged 可能来自检测线程 → 调度回 UI 线程。</summary>
+        private void RefreshRuntimeStatus()
+        {
+            var app = System.Windows.Application.Current;
+            if (app == null || app.Dispatcher.CheckAccess())
+            {
+                ApplyRuntimeStatus();
+                return;
+            }
+            app.Dispatcher.BeginInvoke(new System.Action(ApplyRuntimeStatus));
+        }
+
+        /// <summary>
+        /// 顶栏状态唯一刷新点：只读真实运行态（MockMode / 引擎 IsLoaded / 相机 IsConnected），
+        /// 不按"配置选了谁"假装在线——真实设备断流时相机胶囊必须变红，引擎探活失败必须变橙。
+        /// </summary>
+        private void ApplyRuntimeStatus()
         {
             var monitor = Services.ServiceHub.Monitor;
-            var eng = monitor == null ? null : monitor.Engine;
-            EngineIndicator = eng == null ? "引擎 未接入"
-                : eng.IsLoaded ? "引擎 在线"
-                : "引擎 回落 Mock";
+            if (monitor == null)
+            {
+                EngineStatus = "off"; EngineIndicator = "引擎 未接入";
+                CameraStatus = "off"; CameraIndicator = "相机 未接入";
+                return;
+            }
+
+            MockMode = Services.ServiceHub.MockMode;
+
+            if (Services.ServiceHub.MockMode)
+            {
+                // 演示态：两个胶囊都明示 Mock（橙色），不冒充"在线"
+                EngineStatus = "warn"; EngineIndicator = "引擎 Mock";
+                CameraStatus = "warn"; CameraIndicator = "相机 Mock";
+                return;
+            }
+
+            var eng = monitor.Engine;
+            if (eng == null)
+            {
+                EngineStatus = "off"; EngineIndicator = "引擎 未接入";
+            }
+            else if (eng.IsLoaded)
+            {
+                EngineStatus = "ok"; EngineIndicator = "引擎 在线";
+            }
+            else
+            {
+                EngineStatus = "warn"; EngineIndicator = "引擎 回落 Mock";
+            }
+
+            var cam = monitor.Camera;
+            bool connected = cam != null && cam.IsConnected;
+            CameraStatus = connected ? "ok" : "off";
+            CameraIndicator = connected ? "相机 在线" : "相机 离线";
+        }
+
+        /// <summary>
+        /// 顶栏「Mock 数据」点击：开启 = 相机/引擎都切演示数据；关闭 = 恢复设备页真机 + 引擎页真实卡。
+        /// 二次确认写明影响范围，避免现场误以为"开着 Mock 也在做真实检测"。
+        /// </summary>
+        private void ToggleMock()
+        {
+            bool next = !Services.ServiceHub.MockMode;
+            string text = next
+                ? "开启后：相机切到 Mock 合成画面，检测引擎切到演示引擎。\r\n\r\n"
+                + "用于没有相机 / 没有模型时查看完整流程与界面效果。\r\n"
+                + "真实设备与引擎配置会保留，关闭 Mock 后自动恢复。"
+                : "关闭后：相机切回设备页配置的真实相机，检测引擎切回当前引擎卡。\r\n\r\n"
+                + "真实设备不可达时，顶栏状态胶囊会如实显示离线 / 回落，不会伪装在线。";
+            if (!Services.ServiceHub.Host.Confirm(
+                next ? "开启 Mock 数据模式" : "关闭 Mock 数据模式",
+                text, next ? "开启" : "关闭", false)) return;
+
+            Services.ServiceHub.SetMockMode(next);
+            MockMode = next;
+            ApplyRuntimeStatus();
         }
 
         /// <summary>

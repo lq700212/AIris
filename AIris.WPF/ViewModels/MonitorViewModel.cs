@@ -49,6 +49,9 @@ namespace AIris.WPF.ViewModels
             DemoPlaceAllCommand = new RelayCommand(() => ServiceHub.Monitor.DemoPlaceAll());
             GoRecipeCommand = new RelayCommand(() => ServiceHub.Main.Go("recipe"));
 
+            // Mock 数据模式由顶栏全局切换：演示控制条显隐/引擎提示要即时跟随
+            ServiceHub.MockModeChanged += OnMockModeChanged;
+
             // 运行日志流：首屏回放环形缓冲 + 订阅新行（检测线程触发 → Dispatcher 收口；
             // VM 生命周期=App 级，订阅不退订）。条数超限移最旧（与 AppLog 环形同容量）。
             foreach (var l in AppLog.Snapshot()) Logs.Add(l);
@@ -126,9 +129,31 @@ namespace AIris.WPF.ViewModels
         // —— 运行日志流（AppLog 双出口的 UI 面板侧；环形限 300 条防长跑膨胀） ——
         public ObservableCollection<LogLine> Logs { get; } = new ObservableCollection<LogLine>();
 
-        // —— 演示控制（Mock 专用） ——
+        // —— 演示控制（仅 Mock 数据模式显示） ——
+
+        private bool _isMockMode;
+        /// <summary>当前是否全局 Mock 数据模式：演示控制条只在演示态显示
+        /// （真机 + 真实引擎时驱动 MockScene 没有意义，会误导成"点一下真机画面会变"）。</summary>
+        public bool IsMockMode { get { return _isMockMode; } private set { SetProperty(ref _isMockMode, value); } }
+
         /// <summary>演示零件选项（启用配方的 Parts）。</summary>
         public ObservableCollection<string> DemoParts { get; } = new ObservableCollection<string>();
+
+        private void OnMockModeChanged(bool on)
+        {
+            var app = Application.Current;
+            if (app == null || app.Dispatcher.CheckAccess())
+            {
+                IsMockMode = on;
+                RefreshEngineNote();
+                return;
+            }
+            app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                IsMockMode = on;
+                RefreshEngineNote();
+            }));
+        }
 
         private string _selectedPart;
         public string SelectedPart { get { return _selectedPart; } set { SetProperty(ref _selectedPart, value); } }
@@ -174,8 +199,24 @@ namespace AIris.WPF.ViewModels
                 m.Verdict += OnVerdict;
                 m.StateChanged += OnState;
             }
+            IsMockMode = ServiceHub.MockMode;
             RefreshSteps();
             RefreshDemoParts();
+            RefreshEngineNote();
+        }
+
+        /// <summary>引擎提示行：Mock 模式明示演示替身；真实模式按探活结果（未接入会标回落）。</summary>
+        private void RefreshEngineNote()
+        {
+            if (ServiceHub.MockMode)
+            {
+                EngineNote = "Mock 演示引擎 · 相机/引擎均为合成数据";
+                return;
+            }
+            var eng = ServiceHub.Monitor == null ? null : ServiceHub.Monitor.Engine;
+            EngineNote = eng == null ? ""
+                : eng.IsLoaded ? eng.Name
+                : eng.Name + " 未接入 · 回落 Mock 演示";
         }
 
         private void OnFrame(object s, FrameEventArgs e)
@@ -249,8 +290,8 @@ namespace AIris.WPF.ViewModels
                 StatusLine = e.StatusLine;
                 OkCount = e.OkCount;
                 NgCount = e.NgCount;
-                EngineNote = ServiceHub.Monitor.Engine == null ? "" :
-                    (ServiceHub.Monitor.Engine.IsLoaded ? ServiceHub.Monitor.Engine.Name : ServiceHub.Monitor.Engine.Name + " 未接入 · 回落 Mock 演示");
+                IsMockMode = ServiceHub.MockMode;
+                RefreshEngineNote();
             }));
         }
 

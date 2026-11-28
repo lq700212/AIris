@@ -42,7 +42,7 @@ namespace AIris.WPF.ViewModels
         /// 设备列表（左列；顺序即设计稿）。字段暴露为具名属性，RefreshStatus() 直接改状态点。
         /// 状态语义（vNext 三态）：Online 绿 / Offline 灰 / NotConfigured 橙。
         /// </summary>
-        public DeviceItem Camera { get; } = new DeviceItem { Icon = "◉", Name = "相机 · Mock / RTSP / GigE" };
+        public DeviceItem Camera { get; } = new DeviceItem { Icon = "◉", Name = "相机 · RTSP / GigE" };
         public DeviceItem Light { get; } = new DeviceItem { Icon = "☀", Name = "光源控制器" };
         public DeviceItem Guide { get; } = new DeviceItem { Icon = "▢", Name = "引导屏" };
         public DeviceItem Beacon { get; } = new DeviceItem { Icon = "♪", Name = "声光报警灯" };
@@ -57,11 +57,25 @@ namespace AIris.WPF.ViewModels
             TestCameraCommand = new RelayCommand(TestCamera);
             BackCommand = new RelayCommand(() => ServiceHub.Main.Go("monitor"));
             RefreshStatus();
+
+            // 顶栏切换 Mock 数据模式时，本页相机状态点/提示条要即时跟随
+            ServiceHub.MockModeChanged += OnMockModeChanged;
+        }
+
+        private bool _isMockMode;
+        /// <summary>当前是否全局 Mock 数据模式（顶部提示条显隐；相机参数保存后暂不生效）。</summary>
+        public bool IsMockMode { get { return _isMockMode; } private set { SetProperty(ref _isMockMode, value); } }
+
+        private void OnMockModeChanged(bool on)
+        {
+            var app = Application.Current;
+            if (app == null || app.Dispatcher.CheckAccess()) { RefreshStatus(); return; }
+            app.Dispatcher.BeginInvoke(new Action(RefreshStatus));
         }
 
         /// <summary>
         /// 刷新左导航状态点（Load/Save 后调用）。判定规则（Mock 演示态可解释、保存即见变化）：
-        ///  · 相机：Mock 合成始终在线（与顶栏"相机在线"胶囊同口径）；真机接入后改判 SDK 连接态。
+        ///  · 相机：Mock 数据模式 = 合成画面在线；真实模式读运行中相机 IsConnected（与顶栏胶囊同源）。
         ///  · 光源：亮度参数已给且漫射罩开 = 已配置但仍离机（Mock 无控制器）→ Offline；
         ///    亮度 &lt;= 0 视为未配置。
         ///  · 引导屏/声光：开关开 = 已配置（设备未接 → Offline）；关 = 未配置（橙）。
@@ -69,18 +83,19 @@ namespace AIris.WPF.ViewModels
         /// </summary>
         private void RefreshStatus()
         {
-            // 相机状态按配置类型判定（与 ServiceHub.CreateCamera 装配口径一致）：
-            //   mock = 演示合成始终在线（绿）；
-            //   rtsp = 优先读运行中相机的真实连接态（保存热切换后立即变绿）；
+            // 相机状态判定（与 ServiceHub 装配口径一致）：
+            //   Mock 数据模式 = 合成画面始终在线（绿，文案明示"演示中"）；
+            //   rtsp = 读运行中相机的真实连接态（保存热切换后立即变绿，断流变灰）；
             //   hik = SDK 桩未接入（橙）；IP 空 = 未配置（橙）。
+            IsMockMode = ServiceHub.MockMode;
             var live = ServiceHub.Monitor != null ? ServiceHub.Monitor.Camera : null;
 
-            if (CameraKindIndex == 0)
+            if (IsMockMode)
             {
                 Camera.Status = "Online";
-                Camera.StatusText = "在线 · Mock 合成画面";
+                Camera.StatusText = "演示中 · Mock 合成画面（关闭顶栏「Mock 数据」恢复真机）";
             }
-            else if (CameraKindIndex == 1)
+            else if (CameraKindIndex == 0)   // RTSP
             {
                 if (string.IsNullOrWhiteSpace(CameraIp))
                 {
@@ -95,10 +110,10 @@ namespace AIris.WPF.ViewModels
                 else
                 {
                     Camera.Status = "Offline";
-                    Camera.StatusText = "已配置 · 点「保存」立即应用";
+                    Camera.StatusText = "已配置 · 未连通（点「保存」重连 / 查网线与 IP）";
                 }
             }
-            else
+            else                              // 海康 GigE（SDK 桩）
             {
                 Camera.Status = "NotConfigured";
                 Camera.StatusText = "未接入 · 海康 SDK 桩实现";
@@ -157,8 +172,9 @@ namespace AIris.WPF.ViewModels
 
         /// <summary>
         /// 相机类型索引（ComboBox SelectedIndex 绑定）：
-        /// 0 = Mock 合成画面 / 1 = RTSP 网络相机 / 2 = 海康 GigE 相机。
-        /// 保存时映射回 DeviceConfig.CameraKind（mock/rtsp/hik），ServiceHub 按此装配相机源。
+        /// 0 = RTSP 网络相机 / 1 = 海康 GigE 相机。
+        /// Mock 合成画面已收口为顶栏「Mock 数据」全局开关，不再占相机类型选项。
+        /// 保存时映射回 DeviceConfig.CameraKind（rtsp/hik），ServiceHub 按此装配相机源。
         /// </summary>
         private int _cameraKindIndex;
         public int CameraKindIndex
@@ -204,7 +220,7 @@ namespace AIris.WPF.ViewModels
         private bool _mesEnabled;
         public bool MesEnabled { get { return _mesEnabled; } set { SetProperty(ref _mesEnabled, value); } }
 
-        private string _cameraState = "已连接（Mock）";
+        private string _cameraState = "未测试";
         public string CameraState { get { return _cameraState; } private set { SetProperty(ref _cameraState, value); } }
 
         public ICommand SaveCommand { get; }
@@ -249,45 +265,42 @@ namespace AIris.WPF.ViewModels
                 MesEnabled = MesEnabled
             };
             ServiceHub.Settings.WriteDevices(d);
-            // 相机参数保存后立即热切换（不用重启）：Mock ↔ RTSP ↔ GigE 随时切回
+            // 相机参数保存后立即热切换（不用重启）：RTSP ↔ GigE 随时切回；
+            // Mock 数据模式期间保持合成相机（参数落盘，关闭 Mock 后生效）
             ServiceHub.ApplyCamera();
             RefreshStatus();   // 左导航状态点跟随新参数（保存即见变化，不是假状态）
-            ServiceHub.Host.Info("设备参数已保存。相机配置已立即应用（Mock ↔ RTSP 可随时切换）。", "保存成功");
+            ServiceHub.Host.Info(ServiceHub.MockMode
+                ? "设备参数已保存。当前为 Mock 数据模式，真实相机配置将在关闭 Mock 后生效。"
+                : "设备参数已保存。相机配置已立即应用（RTSP / GigE 可随时切换）。", "保存成功");
         }
 
-        /// <summary>相机类型索引 → DeviceConfig.CameraKind 值（mock/rtsp/hik）。</summary>
+        /// <summary>相机类型索引 → DeviceConfig.CameraKind 值（rtsp/hik；Mock 已收口为全局开关）。</summary>
         private static string IndexToKind(int index)
         {
-            switch (index)
-            {
-                case 1: return "rtsp";
-                case 2: return "hik";
-                default: return "mock";
-            }
+            return index == 1 ? "hik" : "rtsp";
         }
 
-        /// <summary>DeviceConfig.CameraKind 值 → ComboBox 索引。</summary>
+        /// <summary>DeviceConfig.CameraKind 值 → ComboBox 索引（只认 rtsp/hik 两档）。</summary>
         private static int KindToIndex(string kind)
         {
-            if (string.Equals(kind, "rtsp", StringComparison.OrdinalIgnoreCase)) return 1;
-            if (string.Equals(kind, "hik", StringComparison.OrdinalIgnoreCase)) return 2;
-            return 0;
+            return string.Equals(kind, "hik", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
         }
 
         /// <summary>
-        /// 采集测试帧：Mock 直接确认；RTSP 后台 TCP 探测相机端口（不阻塞 UI 线程）；
-        /// 海康 GigE 提示 SDK 桩未接入。
+        /// 采集测试帧：Mock 数据模式直接确认合成画面；RTSP 后台 TCP 探测相机端口
+        /// （不阻塞 UI 线程）；海康 GigE 提示 SDK 桩未接入。
         /// </summary>
         private void TestCamera()
         {
-            if (CameraKindIndex == 0)
+            if (ServiceHub.MockMode)
             {
                 CameraState = "已连接（Mock）";
-                ServiceHub.Host.Info("Mock 相机合成正常（监控台画面即测试帧）。\r\n切到「RTSP 网络相机」并填好 IP 可测真机连接。", "采集测试帧");
+                ServiceHub.Host.Info("当前为 Mock 数据模式，合成画面正常（监控台画面即测试帧）。\r\n"
+                    + "关闭顶栏「Mock 数据」后可测试真实相机连接。", "采集测试帧");
                 return;
             }
 
-            if (CameraKindIndex == 2)
+            if (CameraKindIndex == 1)
             {
                 ServiceHub.Host.Info("海康 GigE 相机为 SDK 桩实现（未接入 MVS SDK）。\r\n网络相机请选「RTSP 网络相机」。", "采集测试帧");
                 return;

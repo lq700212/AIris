@@ -65,7 +65,18 @@ namespace AIris.WPF.Services
         public static IHost Host { get; private set; }
 
         /// <summary>
-        /// App.OnStartup 装配（唯一调用点）。默认装配：Mock 相机 + Mock 检测引擎 + JSONL 审计。
+        /// 全局 Mock 数据模式（[App] MockMode）：true = 相机与检测引擎都使用内置演示数据。
+        /// 唯一切换入口 <see cref="SetMockMode"/>；各页只读本属性决定提示/演示控制条显隐。
+        /// </summary>
+        public static bool MockMode { get; private set; }
+
+        /// <summary>Mock 数据模式切换后触发（UI 线程调用；订阅方自行 Dispatcher 调度）。</summary>
+        public static event Action<bool> MockModeChanged;
+
+        /// <summary>
+        /// App.OnStartup 装配（唯一调用点）。
+        /// 相机/引擎按全局 Mock 数据模式装配：ON = Mock 相机 + Mock 引擎（演示）；
+        /// OFF = 设备页配置的真实相机 + 引擎页选中的真实引擎卡。
         /// </summary>
         public static void Install(MainViewModel mainVm)
         {
@@ -74,14 +85,22 @@ namespace AIris.WPF.Services
             Recipes = new RecipeStore();
             EngineCards = new EngineCardStore();
 
-            var cam = CreateCamera();
+            // 全局 Mock 开关先读（内部完成旧版「相机/引擎卡 = mock」→ MockMode=ON 的首次迁移）
+            MockMode = Settings.ReadMockMode();
+
             var cfg0 = Settings.ReadEngine();   // 协议初值注入（cfg.Protocol 空时按引擎卡默认）
+            // 旧版 ActiveEngineId=mock 且 Mock 卡已删除：迁移到当前商用主力卡，
+            // 这样关闭 Mock 数据模式后有明确的真实引擎目标（不可达时按既有降级语义回落）。
+            if (MigrateLegacyMockEngineSelection(cfg0)) cfg0 = Settings.ReadEngine();
 
             // 首次升级迁移（2026-11-23 引擎卡独立参数）：旧版 INI 只有一套全局 HTTP 参数，
             // 本卡还没有参数记录时把它落到当前引擎卡上（只发生一次；之后以卡参数为权威）。
             MigrateEngineCardParams(cfg0);
 
-            var engine = EngineRegistry.Create(cfg0.ActiveEngineId, cfg0, EngineCards);
+            var cam = CreateCamera(MockMode);
+            var engine = MockMode
+                ? (IDetectionEngine)new MockDetectionEngine()
+                : EngineRegistry.Create(cfg0.ActiveEngineId, cfg0, EngineCards);
             var audit = new JsonAuditStore();
             Monitor = new RunMonitor(cam, engine, audit);
             Monitor.Log += m => AppLog.Info(m);
@@ -90,18 +109,50 @@ namespace AIris.WPF.Services
 
             Main = mainVm;
             Host = new AppHost(mainVm);
-            mainVm.AttachRuntime();   // 顶栏引擎态胶囊订阅（此时 Monitor 已装配；构造器里还拿不到）
+            mainVm.AttachRuntime();   // 顶栏状态胶囊订阅（此时 Monitor 已装配；构造器里还拿不到）
         }
 
         /// <summary>
-        /// 按设备配置装配相机源（启动时一次；设备页保存后重启生效）：
-        ///   mock = Mock 合成画面（演示/无相机默认）
+        /// 切换全局 Mock 数据模式（顶栏「Mock 数据」按钮唯一入口）：
+        /// 持久化 → 相机/引擎热切换（运行中不中断检测线程）→ 通知各页刷新。
+        ///
+        /// 关闭时按 INI 里保存的真实相机与真实引擎卡恢复；真实设备不可达时由运行层按既有
+        /// 语义如实呈现（相机离线红点 / 引擎探活失败回落 Mock 橙点），这里不伪造在线。
+        /// </summary>
+        public static void SetMockMode(bool on)
+        {
+            if (MockMode == on) return;
+            MockMode = on;
+            Settings.WriteMockMode(on);
+
+            if (Monitor != null)
+            {
+                // 相机：ON → 合成画面；OFF → 设备页配置的真机（RTSP/GigE）
+                Monitor.SwapCamera(CreateCamera(on));
+
+                // 引擎：ON → 演示引擎；OFF → 当前引擎卡（探活失败由 RunMonitor 回落并明示）
+                var cfg = Settings.ReadEngine();
+                var engine = on
+                    ? (IDetectionEngine)new MockDetectionEngine()
+                    : EngineRegistry.Create(cfg.ActiveEngineId, cfg, EngineCards);
+                Monitor.SwapEngine(engine, cfg);
+            }
+
+            var h = MockModeChanged;
+            if (h != null) h(on);
+        }
+
+        /// <summary>
+        /// 按设备配置装配相机源（启动时一次；设备页保存后热切换）：
+        ///   mockMode = true → Mock 合成画面（全局 Mock 数据模式）
         ///   rtsp = RTSP 网络相机（安格华等，复用 Kaleidoscope RtspFrameCapturer 拉流）
         ///   hik  = 海康 GigE 工业相机（SDK 桩，真机接入时填实）
-        /// 读取配置失败（INI 损坏等）一律回落 Mock，保证程序能起来。
+        /// 读取配置失败（INI 损坏等）回落 Mock，保证程序能起来（兜底，不是 Mock 选项）。
         /// </summary>
-        private static ICameraSource CreateCamera()
+        private static ICameraSource CreateCamera(bool mockMode)
         {
+            if (mockMode) return new MockCameraSource();
+
             DeviceConfig dev;
             try
             {
@@ -112,27 +163,53 @@ namespace AIris.WPF.Services
                 return new MockCameraSource();
             }
 
-            string kind = (dev.CameraKind ?? "mock").Trim().ToLowerInvariant();
+            string kind = (dev.CameraKind ?? "rtsp").Trim().ToLowerInvariant();
             switch (kind)
             {
-                case "rtsp":
-                    return new RtspCameraSource(dev);
                 case "hik":
                     return new HikCameraSourceStub();
                 default:
-                    return new MockCameraSource();
+                    return new RtspCameraSource(dev);
             }
         }
 
         /// <summary>
         /// 设备页保存后应用相机配置（热切换，不用重启程序）：
         /// 按最新 INI 重建相机源，替换运行中的监控器相机（RunMonitor.SwapCamera 内部处理启停）。
+        /// Mock 数据模式期间保持合成相机不动——真实参数照常落盘，关闭 Mock 后自动生效。
         /// </summary>
         public static ICameraSource ApplyCamera()
         {
-            var next = CreateCamera();
-            if (Monitor != null) Monitor.SwapCamera(next);
+            if (Monitor == null) return null;
+            if (MockMode) return Monitor.Camera;
+
+            var next = CreateCamera(false);
+            Monitor.SwapCamera(next);
             return next;
+        }
+
+        /// <summary>
+        /// 旧版 ActiveEngineId=mock 迁移：Mock 卡已从引擎卡列删除，把选择落到当前商用主力卡
+        /// （Qwen3-VL-8B），并清空协议让 EngineRegistry 按卡默认注入。
+        /// 只在 Mock 模式关闭后才有实际连接行为；Mock 模式期间不探活、不打扰。
+        /// 返回是否发生了迁移（调用方据此重读 INI）。
+        /// </summary>
+        private static bool MigrateLegacyMockEngineSelection(EngineConfig cfg)
+        {
+            if (cfg == null || !string.Equals(cfg.ActiveEngineId, "mock", StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            var def = EngineRegistry.Find("qwen3-vl-http", EngineCards);
+            if (def == null) return false;
+
+            cfg.ActiveEngineId = def.Id;
+            cfg.Protocol = def.Protocol;
+            cfg.HttpBaseUrl = def.HttpBaseUrl;
+            cfg.HttpModel = def.HttpModel;
+            cfg.ApiKey = def.ApiKey;
+            cfg.HttpTimeoutMs = def.HttpTimeoutMs;
+            Settings.WriteEngine(cfg);
+            return true;
         }
 
         /// <summary>
@@ -199,10 +276,14 @@ namespace AIris.WPF.Services
 
             public bool ShowEngineSwitch(EngineCardDefinition card)
             {
+                string mockNote = MockMode
+                    ? "\r\n\r\n当前为 Mock 数据模式：确认切换将同时关闭 Mock（相机切回设备页配置的真实相机）。"
+                    : "";
                 return Confirm("切换检测引擎",
                     "切换到 " + card.Name + " 将卸载当前引擎并重新加载。\r\n许可证：" + card.LicenseNote
                     + "\r\n服务参数：" + card.Protocol + " · " + card.HttpBaseUrl + " · " + card.HttpModel
-                    + "\r\n未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）。",
+                    + "\r\n未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）。"
+                    + mockNote,
                     "确认切换", false);
             }
 

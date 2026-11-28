@@ -3,7 +3,7 @@
 
   ┌──────────────────────────────────────────────────────────────────────────┐
   │ ◉ AI 智瞳  (◉运行监控)(▤配方中心)(🧠检测引擎)(▦审计追溯)(⚙设备集成)        │ ← 52px 渐变顶栏
-  │                              [引擎在线][相机在线] [🌓]   — ▢ ✕          │   菜单收拢进顶栏
+  │                      [引擎态][相机态][Mock 数据] [🌓]   — ▢ ✕        │   菜单收拢进顶栏
   ├──────────────────────────────────────────────────────────────────────────┤
   │                                                                          │
   │   ContentControl（CurrentPage → DataTemplate 映射 6 个页面）              │ ← 内容 *
@@ -23,8 +23,11 @@
     元素（导航胶囊/🌓/三窗钮）必须设 shell:WindowChrome.IsHitTestVisibleInChrome=True，
     否则"按钮点击都没响应"（库 ChromeDialogWindow 头注释同款血泪）；顶栏其余空白
     区域即系统拖动区（原 DragMove 事件随之删除，勿回加）；
-  · 顶栏静态胶囊（引擎/相机在线）半高圆角 / 高 22 / Padding 0 10，
-    与设计稿 `.status .chip` 同口径（2026-11-23 由 7 圆角改为药丸）；
+  · 顶栏状态胶囊（引擎/相机）半高圆角 / 高 22 / Padding 0 10，
+    与设计稿 `.status .chip` 同口径（2026-11-23 由 7 圆角改为药丸）。
+    【2026-11-28 状态真实化】文字与圆点都绑运行态（EngineIndicator/EngineStatus、
+    CameraIndicator/CameraStatus）：绿=在线、橙=Mock/回落、红=离线，不再写死"在线"+绿点。
+    「Mock 数据」是全局演示开关（相机+引擎一起切），激活时按钮高亮；
   · 三窗钮与主题钮用自绘 AiTopGhostButton（hover 白 16% 半高药丸垫），关闭钮
     AiTopCloseButton（hover 红底半高药丸垫）——不再用库 KxTitleCloseButton 的
     整块方形红底（无边框圆角窗右上角方角 hover 垫与窗体 16 圆角打架）；
@@ -125,7 +128,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
-                        <Border x:Name="Bd" Background="Transparent" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}"
+                        <Border x:Name="Bd" Background="{TemplateBinding Background}" CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}"
                                 Margin="3,0" Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
@@ -141,6 +144,21 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- 顶栏「Mock 数据」全局开关：基础形态同幽灵钮，激活（MockMode=True）时白 24% 药丸底 +
+             加粗，与两个橙色 Mock 状态胶囊形成"当前是演示数据"的一致视觉。 -->
+        <Style x:Key="AiTopMockButton" TargetType="Button" BasedOn="{StaticResource AiTopGhostButton}">
+            <Setter Property="MinHeight" Value="26"/>
+            <Setter Property="Padding" Value="10,0"/>
+            <Setter Property="FontSize" Value="11"/>
+            <Setter Property="Margin" Value="0,0,2,0"/>
+            <Style.Triggers>
+                <DataTrigger Binding="{Binding MockMode}" Value="True">
+                    <Setter Property="Background" Value="#3DFFFFFF"/>
+                    <Setter Property="FontWeight" Value="SemiBold"/>
+                </DataTrigger>
+            </Style.Triggers>
+        </Style>
+
         <!-- 顶栏关闭钮（药丸口径与 AiTopGhostButton 一致：hover 红底半高药丸垫，
              不再用库 KxTitleCloseButton 的整块方形红底——无边框圆角窗右上角方角 hover
             垫会与窗体圆角打架，用户 2026-11-23 反馈"胶囊太尖锐"同源问题） -->
@@ -236,22 +254,61 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
 
-                <!-- 右侧：状态胶囊（高 22 药丸 + 6px 圆点，对位设计稿 .status .chip）+ 主题切换 -->
+                <!-- 右侧：状态胶囊（高 22 药丸 + 6px 圆点，对位设计稿 .status .chip）
+                     + Mock 数据开关 + 主题切换。
+                     【状态真实化】圆点 Fill 由 EngineStatus / CameraStatus 驱动：
+                       ok（绿）/ warn（橙：Mock 或引擎回落）/ off（红：未接入/离线）。
+                     颜色用顶栏专用字面值（顶栏是固定橙粉渐变彩底，浅深主题下一致；
+                     页面内控件仍一律走 Theme* 键）。 -->
                 <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center" Margin="0,0,6,0">
-                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0">
+                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0"
+                            ToolTip="{Binding EngineIndicator}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="6" Height="6" Fill="#FFB6F0CE" Margin="0,0,5,0"/>
+                            <Ellipse Width="6" Height="6" Margin="0,0,5,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#FFB6F0CE"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding EngineStatus}" Value="warn">
+                                                <Setter Property="Fill" Value="#FFFFD166"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding EngineStatus}" Value="off">
+                                                <Setter Property="Fill" Value="#FFFF9A9A"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
                             <TextBlock Text="{Binding EngineIndicator}" FontSize="11" Foreground="White"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
-                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0">
+                    <Border CornerRadius="{Binding ActualHeight, RelativeSource={RelativeSource Self}, Converter={StaticResource PillRadius}}" Background="#2EFFFFFF" MinHeight="22" Padding="10,0" Margin="0,0,6,0"
+                            ToolTip="{Binding CameraIndicator}">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                            <Ellipse Width="6" Height="6" Fill="#FFB6F0CE" Margin="0,0,5,0"/>
-                            <TextBlock Text="相机在线" FontSize="11" Foreground="White"
+                            <Ellipse Width="6" Height="6" Margin="0,0,5,0">
+                                <Ellipse.Style>
+                                    <Style TargetType="Ellipse">
+                                        <Setter Property="Fill" Value="#FFB6F0CE"/>
+                                        <Style.Triggers>
+                                            <DataTrigger Binding="{Binding CameraStatus}" Value="warn">
+                                                <Setter Property="Fill" Value="#FFFFD166"/>
+                                            </DataTrigger>
+                                            <DataTrigger Binding="{Binding CameraStatus}" Value="off">
+                                                <Setter Property="Fill" Value="#FFFF9A9A"/>
+                                            </DataTrigger>
+                                        </Style.Triggers>
+                                    </Style>
+                                </Ellipse.Style>
+                            </Ellipse>
+                            <TextBlock Text="{Binding CameraIndicator}" FontSize="11" Foreground="White"
                                        VerticalAlignment="Center"/>
                         </StackPanel>
                     </Border>
+                    <Button Content="{Binding MockButtonText}" Command="{Binding ToggleMockCommand}"
+                            Style="{StaticResource AiTopMockButton}"
+                            ToolTip="Mock 数据模式：相机与引擎都切到内置演示数据（无设备/无模型时看效果）"
+                            shell:WindowChrome.IsHitTestVisibleInChrome="True"/>
                     <Button Command="{Binding ToggleThemeCommand}" Content="🌓"
                             Style="{StaticResource AiTopGhostButton}" FontSize="14" MinWidth="32" MinHeight="26"
                             Margin="2,0,0,0" ToolTip="切换深浅主题"

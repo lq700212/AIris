@@ -1,3 +1,4 @@
+using System;
 using AIris.Core.Config;
 using AIris.Core.Model;
 
@@ -16,12 +17,39 @@ namespace AIris.Core.Store
         /// <summary>底层 INI（主题开关/其它零散键直接走这里）。</summary>
         public IniFile Ini { get { return _ini; } }
 
+        // —— 全局 Mock 数据模式（[App]） ——
+
+        /// <summary>
+        /// 全局 Mock 数据模式（[App] MockMode）：ON = 相机与检测引擎都使用内置演示数据。
+        /// 这是「没有相机/没有模型时看效果」的唯一开关（顶栏「Mock 数据」按钮驱动）。
+        ///
+        /// 【首次升级迁移】旧版把 Mock 分散在「相机类型 = mock」「引擎卡 = mock」两处；
+        /// 任一命中即视为原本就在演示态 → 自动写 MockMode=ON（只发生一次）。
+        /// 之后相机类型下拉只保留 RTSP/GigE，引擎卡只保留真实模型，Mock 语义完全收口到本键。
+        /// </summary>
+        public bool ReadMockMode()
+        {
+            string raw = _ini.Read("App", "MockMode", "");
+            if (!string.IsNullOrEmpty(raw)) return _ini.ReadFlag("App", "MockMode", false);
+
+            bool legacy = string.Equals(_ini.Read("Camera", "Kind", ""), "mock", StringComparison.OrdinalIgnoreCase)
+                       || string.Equals(_ini.Read("Engine", "ActiveEngineId", ""), "mock", StringComparison.OrdinalIgnoreCase);
+            _ini.Write("App", "MockMode", legacy ? "ON" : "OFF");
+            return legacy;
+        }
+
+        /// <summary>写全局 Mock 数据模式（顶栏切换时调用；运行期由 ServiceHub.SetMockMode 统一收口）。</summary>
+        public void WriteMockMode(bool on)
+        {
+            _ini.Write("App", "MockMode", on ? "ON" : "OFF");
+        }
+
         // —— 引擎配置（[Engine]） ——
         public EngineConfig ReadEngine()
         {
             return new EngineConfig
             {
-                ActiveEngineId = _ini.Read("Engine", "ActiveEngineId", "mock"),
+                ActiveEngineId = _ini.Read("Engine", "ActiveEngineId", "qwen3-vl-http"),
                 HttpBaseUrl = _ini.Read("Engine", "HttpBaseUrl", ""),
                 HttpModel = _ini.Read("Engine", "HttpModel", ""),
                 Protocol = _ini.Read("Engine", "Protocol", ""),         // 空 = 按引擎卡默认注入（EngineRegistry）
@@ -53,7 +81,9 @@ namespace AIris.Core.Store
         {
             return new DeviceConfig
             {
-                CameraKind = _ini.Read("Camera", "Kind", "mock"),
+                // 相机类型只剩真实设备两档（rtsp / hik）；旧版 "mock" 归一到 rtsp，
+                // Mock 演示由 [App] MockMode 独立承载（见 ReadMockMode 的首次迁移）。
+                CameraKind = NormalizeCameraKind(_ini.Read("Camera", "Kind", "rtsp")),
                 CameraIp = _ini.Read("Camera", "Ip", "192.168.1.64"),
                 CameraPort = _ini.Read("Camera", "Port", "554"),
                 CameraPixelFormat = _ini.Read("Camera", "PixelFormat", "Mono8（黑白）"),
@@ -72,7 +102,7 @@ namespace AIris.Core.Store
 
         public void WriteDevices(DeviceConfig d)
         {
-            _ini.Write("Camera", "Kind", d.CameraKind ?? "mock");
+            _ini.Write("Camera", "Kind", NormalizeCameraKind(d.CameraKind));
             _ini.Write("Camera", "Ip", d.CameraIp);
             _ini.Write("Camera", "Port", d.CameraPort);
             _ini.Write("Camera", "PixelFormat", d.CameraPixelFormat);
@@ -91,6 +121,17 @@ namespace AIris.Core.Store
         private static int ParseInt(string s, int def)
         {
             int v; return int.TryParse(s, out v) ? v : def;
+        }
+
+        /// <summary>
+        /// 相机类型归一：只认 rtsp / hik 两档真实设备。
+        /// 旧版 "mock"（以及任何未知值）一律落到 rtsp——Mock 演示不再由相机类型表达，
+        /// 而是全局 [App] MockMode；这样设备页下拉不会出现"没有选中项"的空框。
+        /// </summary>
+        private static string NormalizeCameraKind(string kind)
+        {
+            return string.Equals((kind ?? "").Trim(), "hik", StringComparison.OrdinalIgnoreCase)
+                ? "hik" : "rtsp";
         }
     }
 }
