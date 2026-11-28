@@ -338,6 +338,8 @@
         <Setter Property="FontSize" Value="12"/>
         <Setter Property="Foreground" Value="{DynamicResource ThemeTextFg}"/>
         <Setter Property="HorizontalContentAlignment" Value="Left"/>
+        <!-- ALT 键焦点虚线框：下拉项选中后按 ALT 会画出默认虚线，与自绘圆角项冲突 -->
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="ComboBoxItem">
@@ -689,6 +691,35 @@
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+    <!-- ============================================================
+         10. 全局焦点虚线框清理（2026-11-28 ALT 键实训）
+
+         【现象】按 ALT 键时引擎页/审计页出现一圈虚线框。
+         【根因】鼠标点过某个可聚焦元素后，该元素持有键盘焦点但不画焦点框；
+                一旦按 ALT（键盘输入），WPF 立即为当前焦点元素补画默认
+                FocusVisualStyle（黑色虚线 Adorner），与自绘视觉格格不入。
+                项目里按钮/输入框等**操作控件**早已逐个清掉，漏的是**容器类**：
+                ScrollViewer 默认可聚焦（方向键滚动）、ItemsControl 的项容器
+                ContentPresenter 也可能接焦点，于是整块内容区被画上一圈虚线。
+         【口径】本项目容器不参与键盘导航（页面切换走顶栏胶囊），
+                容器一律 Focusable=False + FocusVisualStyle=Null；
+                操作控件（Button/TextBox/ComboBox）只清 FocusVisualStyle、
+                保留 Focusable（无障碍键盘可达）。
+         【边界】只给**库里没有隐式样式**的类型加隐式样式——隐式样式是整类替换，
+                若库已有同类型隐式样式（如 ShellStyles 的 ListBoxItem/ComboBoxItem），
+                在这里再写会把库外观冲掉，那两类改用显式样式逐个清（AiComboItem 已清）。
+         ============================================================ -->
+    <Style TargetType="ScrollViewer">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+    <Style TargetType="ItemsControl">
+        <Setter Property="Focusable" Value="False"/>
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
+    </Style>
+    <Style TargetType="ContentPresenter">
+        <Setter Property="FocusVisualStyle" Value="{x:Null}"/>
     </Style>
 
 </ResourceDictionary>

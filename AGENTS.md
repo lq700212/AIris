@@ -143,6 +143,20 @@
     每个按钮都要逐个放行；宿主 CaptionHeight 应=顶栏全高（空白处拖动+双击最大化）。
     配套：**UI 交互验证必须物理实点**（PrintWindow/静态截图验不出点击吞没）——
     `Tools\click_ui.ps1`（SetCursorPos+mouse_event）+ agent-desktop 截图链路。
+14. **UI 线程禁做任何耗时操作**（2026-11-28 启动卡顿事故：`HttpDetectionEngine.Load` 同步
+    HTTP 探活 + `RtspCameraSource.Start` 同步 RTSP 握手都在 UI 线程，重启时"鼠标转圈"30 秒）：
+    - 网络 / 磁盘 / 模型推理 / 相机握手 / 串口等待 / 大文件解析 —— **一律 `KxBackground`**
+      （`ThirdParty\Kaleidoscope\Kaleidoscope\Threading\KxBackground.cs`）：
+      fire-and-forget 用 `Run(name, work)`（异常必达 AppLog，不静默）；要结果用
+      `RunAsync<T>`（异常抛给 await 方）；并发要有界用 `RunBounded(key, max, ...)`；
+      结果回 UI 用 `Post(...)`；
+    - **禁止 `.GetAwaiter().GetResult()` / `.Wait()` / `.Result` 出现在 UI 线程可达路径**
+      （检测线程/专用后台线程内的串行等待除外，但要在注释里写明"此处不是 UI 线程"）；
+    - **启动链专项自检**：`App.OnStartup` 里每个调用都要问一句"它会不会等网络/磁盘"——
+      主窗 `Show()` 之前只允许内存装配与配置读取（毫秒级），探活/连设备一律后台；
+    - 线程池不引入第三方（调研结论见 Kaleidoscope AGENTS.md 铁律 5）：.NET 内置
+      ThreadPool 就是最稳的，`KxBackground` 只补异常/并发/封送三件事；
+    - 验证口径：主窗出现 ≤1.5s，出现后 1s 内 `SendMessageTimeout(WM_NULL)` 必须响应。
 
 ## 约定索引
 

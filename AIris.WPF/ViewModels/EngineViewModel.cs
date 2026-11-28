@@ -2,6 +2,7 @@ using System;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Windows.Input;
+using System.Windows.Threading;
 using AIris.Core.Detect;
 using AIris.Core.Model;
 using AIris.WPF.Services;
@@ -18,13 +19,27 @@ namespace AIris.WPF.ViewModels
         {
             Card = card;
             _owner = owner;
-            SwitchCommand = new RelayCommand(() => owner.SwitchTo(this));
             DeleteCommand = new RelayCommand(() => owner.DeleteEngine(this));
         }
 
+        /// <summary>卡片主标题（模型名）；上游平台括号见 VendorSuffix（小一号灰字）。</summary>
         public string Name { get { return Card.Name; } }
+
+        /// <summary>标题里的平台括号（" (workbuddy)"）：仅 Magpie 反代卡有，小字号灰字跟在模型名后。</summary>
+        public string VendorSuffix
+        {
+            get
+            {
+                string v = Card.VendorName;
+                return v.Length > 0 ? " (" + v + ")" : "";
+            }
+        }
+
         public string LicenseNote { get { return Card.LicenseNote; } }
         public bool IsMock { get { return Card.IsMock; } }
+
+        /// <summary>是否经 Magpie 反代网关接入（卡片显示喜鹊品牌标）。</summary>
+        public bool IsMagpie { get { return string.Equals(Card.Gateway, "magpie", StringComparison.OrdinalIgnoreCase); } }
 
         /// <summary>是否可删除：仅「＋ 添加引擎」创建的自定义卡可删（内置卡无删除入口）。</summary>
         public bool CanDelete { get { return !Card.IsBuiltin && !Card.IsMock; } }
@@ -40,6 +55,9 @@ namespace AIris.WPF.ViewModels
             }
         }
 
+        /// <summary>牌面底部提示（牌堆收拢/展开时文字不变，交互提示统一在右下角胶囊）。</summary>
+        public string DeckHintText { get { return CanDelete ? "自定义卡 · 可删除" : "内置卡 · 不可删除"; } }
+
         /// <summary>许可证胶囊语义档：Mock=Warn（演示）/ LocateAnything=Ng（仅研究不可商用）/ 其余=Ok（Apache 商用）。</summary>
         public string LicenseTag
         {
@@ -51,18 +69,13 @@ namespace AIris.WPF.ViewModels
         }
 
         private bool _active;
-        /// <summary>是否当前引擎（主色描边焦点卡 + "当前引擎"胶囊）。Mock 数据模式下全部为 false。</summary>
+        /// <summary>是否当前引擎（主色描边焦点卡 + 标题右侧绿点）。Mock 数据模式下全部为 false。</summary>
         public bool Active
         {
             get { return _active; }
-            set { SetProperty(ref _active, value); OnPropertyChanged(nameof(StateText)); OnPropertyChanged(nameof(SwitchText)); OnPropertyChanged(nameof(SwitchEnabled)); }
+            set { SetProperty(ref _active, value); }
         }
 
-        public string StateText { get { return _active ? "当前引擎" : "可切换"; } }
-        public string SwitchText { get { return _active ? "使用中" : "切换到此引擎"; } }
-        public bool SwitchEnabled { get { return !_active; } }
-
-        public ICommand SwitchCommand { get; }
         public ICommand DeleteCommand { get; }
 
         /// <summary>外部刷新态：Active=选中（Mock 数据模式下不高亮任何真实卡）。</summary>
@@ -89,10 +102,20 @@ namespace AIris.WPF.ViewModels
             BackCommand = new RelayCommand(() => ServiceHub.Main.Go("monitor"));
             TestConnectionCommand = new RelayCommand(TestConnection);
             AddEngineCommand = new RelayCommand(AddEngine);
+            FetchMagpieModelsCommand = new RelayCommand(FetchMagpieModels);
+            PickMagpieModelCommand = new RelayCommand(PickMagpieModel);
+
+            // 探活状态自动回填（2026-11-28）：引擎 Load 改后台探活后，"已就绪/未接入"
+            // 会在 1~30s 内异步变化，页面停留期间每秒读一次内存状态即可跟上，无需事件。
+            _stateTimer = new DispatcherTimer { Interval = TimeSpan.FromSeconds(1) };
+            _stateTimer.Tick += (s, e) => RefreshState();
 
             // Mock 数据模式由顶栏全局切换：本页提示条/卡片高亮要即时跟随（不依赖 OnEnter 重进）
             ServiceHub.MockModeChanged += OnMockModeChanged;
         }
+
+        /// <summary>页面状态轮询计时器（仅页面可见时运行，OnLeave 停止）。</summary>
+        private readonly DispatcherTimer _stateTimer;
 
         public ObservableCollection<EngineCardVm> Cards { get; } = new ObservableCollection<EngineCardVm>();
 
@@ -200,7 +223,56 @@ namespace AIris.WPF.ViewModels
         public ICommand TestConnectionCommand { get; }
         public ICommand AddEngineCommand { get; }
 
-        public override void OnEnter() { Load(); }
+        // —— Magpie 反代模型快捷选择（2026-11-28）——
+        // 用户会频繁在 Magpie 的不同模型间切换（deepseek-flash / glm-5.3-flash / gpt-6-astra…），
+        // 每次手抄 "workbuddy/xxx" 模型名易错；这里拉 GET /v1/models，点胶囊直接填进表单。
+
+        /// <summary>最近一次拉取到的 Magpie 模型（胶囊列表绑定源）。</summary>
+        public ObservableCollection<Kaleidoscope.Infer.InferModelInfo> MagpieModels { get; }
+            = new ObservableCollection<Kaleidoscope.Infer.InferModelInfo>();
+
+        private bool _hasMagpieModels;
+        /// <summary>是否已拉取到模型（胶囊列表显隐；空列表时不占页面高度）。</summary>
+        public bool HasMagpieModels
+        {
+            get { return _hasMagpieModels; }
+            private set { SetProperty(ref _hasMagpieModels, value); }
+        }
+
+        private string _magpieHint = "";
+        /// <summary>Magpie 拉取结果提示（成功=模型数量；失败=原因，就地显示不用翻日志）。</summary>
+        public string MagpieHint
+        {
+            get { return _magpieHint; }
+            private set
+            {
+                if (SetProperty(ref _magpieHint, value))
+                    OnPropertyChanged(nameof(HasMagpieHint));
+            }
+        }
+
+        /// <summary>是否显示拉取提示（空串时整行隐藏，不占表单高度）。</summary>
+        public bool HasMagpieHint { get { return !string.IsNullOrEmpty(_magpieHint); } }
+
+        /// <summary>最近一次拉取使用的 Magpie 地址（点胶囊回填时用，避免表单里是 Ollama/vLLM 地址）。</summary>
+        private string _lastMagpieUrl = EngineRegistry.MagpieDefaultBaseUrl;
+
+        /// <summary>拉取进行中标记（防连点：async void 命令重入会并发拉取 + 竞态清空胶囊）。</summary>
+        private bool _magpieFetching;
+
+        public ICommand FetchMagpieModelsCommand { get; }
+        public ICommand PickMagpieModelCommand { get; }
+
+        public override void OnEnter()
+        {
+            Load();
+            _stateTimer.Start();   // 后台探活结果 1~30s 内异步回填，页面可见时每秒刷新状态行
+        }
+
+        public override void OnLeave()
+        {
+            _stateTimer.Stop();    // 离开页面即停，不空转
+        }
 
         /// <summary>装载卡片 + 参数 + 状态（进页面时卡列只建一次；增删卡走 ReloadCards）。</summary>
         public void Load()
@@ -286,13 +358,14 @@ namespace AIris.WPF.ViewModels
             app.Dispatcher.BeginInvoke(new Action(RefreshState));
         }
 
-        /// <summary>切换引擎（Host 二次确认 → 卡参数写入配置 → SwapEngine → 落 INI → 表单回填 + 刷新）。
+        /// <summary>切换引擎（直接生效：卡参数写入配置 → SwapEngine → 落 INI → 表单回填 + 刷新）。
+        /// 2026-11-28 用户定版：**去掉二次确认弹窗**——牌堆展开态点一张牌就切过去，
+        /// 切换本身可逆（再点另一张即可），弹窗只是多一次点击。
         /// Mock 数据模式下切换真实卡 = 同时退出 Mock（相机切回设备页真实相机）。
         /// 装载（探活）统一由 RunMonitor.SwapEngine 执行，这里不重复 Load（否则 HTTP 引擎白等两轮探活）。</summary>
         public void SwitchTo(EngineCardVm card)
         {
             if (card == null) return;
-            if (!ServiceHub.Host.ShowEngineSwitch(card.Card)) return;
 
             var cfg = ServiceHub.Settings.ReadEngine();
             cfg.ActiveEngineId = card.Card.Id;
@@ -331,6 +404,98 @@ namespace AIris.WPF.ViewModels
             ServiceHub.Host.Info("引擎卡已添加。填好连接参数后点卡片上的「切换到此引擎」即可使用。", "已添加");
         }
 
+        /// <summary>
+        /// 拉取 Magpie 模型列表（async void：拉取期间界面不冻结，符合"UI 线程禁做网络 IO"红线）。
+        /// 实际能力在 Kaleidoscope.Infer.InferClient.ListModelsAsync（通用模型目录发现，
+        /// OpenAI 兼容 /v1/models；vLLM / llama.cpp / Ollama / Magpie 同一入口）。
+        /// 地址口径：表单地址含 "3425"（Magpie 默认端口）就用表单地址；
+        /// 否则回落默认 http://127.0.0.1:3425——避免在 Ollama(11434)/vLLM(8000) 卡上
+        /// 点这个按钮时打错端点（拉取失败会误以为 Magpie 挂了）。
+        /// 异常全部就地转成提示文本：async void 里未捕获异常会直接崩进程。
+        /// </summary>
+        private async void FetchMagpieModels()
+        {
+            // 防连点：拉取中再点直接忽略（同一网关并发拉列表无意义，还会竞态清空胶囊）
+            if (_magpieFetching) return;
+            _magpieFetching = true;
+
+            string url = (HttpBaseUrl ?? "").Trim();
+            if (url.IndexOf("3425", StringComparison.Ordinal) < 0) url = EngineRegistry.MagpieDefaultBaseUrl;
+            _lastMagpieUrl = url;
+            MagpieHint = "正在拉取 " + url + " 的模型列表…";
+
+            try
+            {
+                var ep = new Kaleidoscope.Infer.InferEndpoint
+                {
+                    Protocol = Kaleidoscope.Infer.InferProtocol.OpenAi,   // Magpie = OpenAI 兼容网关
+                    BaseUrl = url,
+                    TimeoutMs = 3000,
+                };
+
+                Kaleidoscope.Infer.InferModelListReply reply;
+                var client = new Kaleidoscope.Infer.InferClient();
+                try
+                {
+                    // await 而不是 GetResult()：本机 38ms，远程网关可能到 3s，同步等会冻结整个界面
+                    reply = await client.ListModelsAsync(ep, System.Threading.CancellationToken.None)
+                        .ConfigureAwait(true);   // 回 UI 线程再更新集合（ObservableCollection 非线程安全）
+                }
+                finally { client.Dispose(); }
+
+                MagpieModels.Clear();
+                if (reply.Models.Count == 0)
+                {
+                    HasMagpieModels = false;
+                    MagpieHint = "拉取失败：" + (string.IsNullOrEmpty(reply.Error) ? "网关未返回模型" : reply.Error)
+                        + "（确认 Magpie 已启动、地址正确）";
+                    return;
+                }
+
+                foreach (var m in reply.Models) MagpieModels.Add(m);
+                HasMagpieModels = true;
+
+                int imageCount = reply.Models.Count(m => m.ImageSupportKnown && m.SupportsImage);
+                int unknownCount = reply.Models.Count(m => !m.ImageSupportKnown);
+                // 只在真有"未知"模型时才提这句——服务声明齐全时（如 Magpie）说"0 个能力未知"是噪音
+                string detail = imageCount + " 个确认支持图像";
+                if (unknownCount > 0) detail += "，" + unknownCount + " 个能力未知（服务未声明，需自行确认）";
+                MagpieHint = "已拉取 " + reply.Models.Count + " 个模型：" + detail
+                    + "。点下方胶囊填入模型名，再点右上「应用配置」。";
+            }
+            catch (Exception ex)
+            {
+                HasMagpieModels = false;
+                MagpieHint = "拉取失败：" + ex.Message;
+            }
+            finally
+            {
+                _magpieFetching = false;
+            }
+        }
+
+        /// <summary>
+        /// 点模型胶囊 → 回填模型名 + OpenAI 协议 + Magpie 地址。
+        /// 不自动应用：用户确认参数后点「应用配置」才热重载（与表单其他字段同一节奏）。
+        /// </summary>
+        private void PickMagpieModel(object parameter)
+        {
+            var m = parameter as Kaleidoscope.Infer.InferModelInfo;
+            if (m == null) return;
+
+            HttpModel = m.Id;
+            Protocol = "openai";   // Magpie 走 /v1/chat/completions，与 vLLM 同一信封
+            if ((HttpBaseUrl ?? "").IndexOf("3425", StringComparison.Ordinal) < 0)
+                HttpBaseUrl = _lastMagpieUrl;
+
+            if (m.ImageSupportKnown && !m.SupportsImage)
+                MagpieHint = "⚠ " + m.Id + " 未声明图像输入，检测会出不了框；请换标「图像」的模型。";
+            else if (!m.ImageSupportKnown)
+                MagpieHint = "已填入 " + m.Id + "（服务未声明图像能力，请自行确认）。点右上「应用配置」生效。";
+            else
+                MagpieHint = "已填入 " + m.Id + "。点右上「应用配置」热重载后生效。";
+        }
+
         /// <summary>删除自定义引擎卡（内置卡无删除入口；删的是当前激活卡时切回 Mock 演示引擎）。</summary>
         public void DeleteEngine(EngineCardVm vm)
         {
@@ -361,8 +526,15 @@ namespace AIris.WPF.ViewModels
             RefreshState();
         }
 
-        /// <summary>测试连接（用表单当前值——未保存——探活；结果就地回显在按钮左侧胶囊，不用翻日志）。</summary>
-        private void TestConnection()
+        /// <summary>
+        /// 测试连接（用表单当前值——未保存——探活；结果就地回显在按钮左侧胶囊，不用翻日志）。
+        ///
+        /// 【为什么 async void】2026-11-28 启动卡顿整改：旧版同步 GetResult 等 3s，
+        /// 点按钮期间整个窗口卡死（鼠标转圈）。探活本身是 IO 等待，必须异步——
+        /// await 期间 UI 线程空闲，结果回来由 WPF SynchronizationContext 自动封送回 UI 线程。
+        /// async void 在此处安全：方法体 try/catch 全覆盖，不会漏异常到全局处理器。
+        /// </summary>
+        private async void TestConnection()
         {
             var ep = new Kaleidoscope.Infer.InferEndpoint
             {
@@ -372,30 +544,35 @@ namespace AIris.WPF.ViewModels
                 ApiKey = ApiKey,
                 TimeoutMs = 3000,
             };
-            var client = new Kaleidoscope.Infer.InferClient();
-            try
+
+            TestState = "run";
+            TestText = "探测中…";
+
+            using (var client = new Kaleidoscope.Infer.InferClient())
             {
-                var r = client.ProbeAsync(ep, System.Threading.CancellationToken.None).GetAwaiter().GetResult();
-                if (r.Ok)
+                try
                 {
-                    TestState = "ok";
-                    TestText = "探活在线 · " + r.LatencyMs + " ms";
-                    ServiceHub.Host.Info("连接成功：" + ep.BaseUrl + "\r\n响应 " + r.LatencyMs + " ms（协议 " + Protocol + "）", "测试连接");
+                    var r = await client.ProbeAsync(ep, System.Threading.CancellationToken.None);
+                    if (r.Ok)
+                    {
+                        TestState = "ok";
+                        TestText = "探活在线 · " + r.LatencyMs + " ms";
+                        ServiceHub.Host.Info("连接成功：" + ep.BaseUrl + "\r\n响应 " + r.LatencyMs + " ms（协议 " + Protocol + "）", "测试连接");
+                    }
+                    else
+                    {
+                        TestState = "fail";
+                        TestText = "不可达 · " + r.Error;
+                        ServiceHub.Host.Info("连接失败：" + r.Error + "\r\n检查服务地址/协议是否匹配部署形态。", "测试连接");
+                    }
                 }
-                else
+                catch (Exception ex)
                 {
                     TestState = "fail";
-                    TestText = "不可达 · " + r.Error;
-                    ServiceHub.Host.Info("连接失败：" + r.Error + "\r\n检查服务地址/协议是否匹配部署形态。", "测试连接");
+                    TestText = "不可达 · " + ex.Message;
+                    ServiceHub.Host.Info("连接失败：" + ex.Message, "测试连接");
                 }
             }
-            catch (Exception ex)
-            {
-                TestState = "fail";
-                TestText = "不可达 · " + ex.Message;
-                ServiceHub.Host.Info("连接失败：" + ex.Message, "测试连接");
-            }
-            finally { client.Dispose(); }
         }
 
         /// <summary>协议 id → InferProtocol 枚举（与 HttpDetectionEngine.BuildEndpoint 同口径）。</summary>

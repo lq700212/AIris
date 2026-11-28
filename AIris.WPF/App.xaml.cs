@@ -49,6 +49,14 @@ namespace AIris.WPF
             LogSinkInjector.Install();
             Core.Config.AppPaths.EnsureDirs();
 
+            // —— 3.0 后台执行门面（KxBackground）注入 ——
+            // 库侧所有 fire-and-forget 任务的异常统一进 AppLog，杜绝"后台静默失败"；
+            // UI 封送统一走 Dispatcher，库不依赖 WPF（可跨框架复用）。
+            Kaleidoscope.Threading.KxBackground.ErrorSink =
+                (name, ex) => AppLog.Error("后台任务失败：" + name, ex);
+            Kaleidoscope.Threading.KxBackground.UiPost =
+                action => Dispatcher.BeginInvoke(action);
+
             // —— 3.1 渲染策略（V0.1.16 视频卡顿整改）——
             // 旧版无条件 RenderMode.SoftwareOnly：相机 5MP 画面 8fps 的缩放/合成全压 CPU，
             // 叠加主窗分层透明（又是整窗软件渲染）→ 单核实测 63%，画面明显卡顿。

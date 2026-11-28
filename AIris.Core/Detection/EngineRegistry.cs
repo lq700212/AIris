@@ -28,6 +28,13 @@ namespace AIris.Core.Detect
     public static class EngineRegistry
     {
         /// <summary>
+        /// 本机 Magpie 反代网关默认地址（yetone/magpie 的 magpie-windows-amd64.exe 默认监听 3425）。
+        /// 只用于 UI「拉取模型」的默认值——模型列表拉取本身走 Kaleidoscope.Infer.InferClient.ListModelsAsync，
+        /// 与 Magpie 无耦合（vLLM / Ollama 同一入口）。
+        /// </summary>
+        public const string MagpieDefaultBaseUrl = "http://127.0.0.1:3425";
+
+        /// <summary>
         /// 内置引擎卡预设（顺序 = 引擎页卡序）。连接参数是"推荐默认值"，
         /// 现场可在引擎页改并「应用配置」——参数按 id 覆盖存 EngineCardStore。
         /// </summary>
@@ -71,6 +78,24 @@ namespace AIris.Core.Detect
                 IsBuiltin = true, Protocol = "ollama",
                 HttpBaseUrl = "http://127.0.0.1:11434", HttpModel = "qwen2.5vl:3b",
                 HttpTimeoutMs = 120000,
+            },
+            // DeepSeek V4.1 Flash（Magpie 反代 · 云端验证卡）：2026-11-28 实测接入。
+            // Magpie（yetone/magpie）把 WorkBuddy 的 DeepSeek 额度反代成本地 OpenAI 兼容网关，
+            // 原生支持 image_url base64 + JSON bbox_2d grounding；全尺寸 2304×1296 单帧约 4s，
+            // 中文 label 正常（"杯子"/"手机"）。协议用 openai（Magpie 走 /v1/chat/completions，
+            // 与 vLLM 同一信封，无需新增传输器）。
+            // ⚠️ 云端模型违反"全本地离线部署"产品定位——仅 POC 验证用，出货必须切回本地引擎卡。
+            // 模型 id 随 Magpie/WorkBuddy 更新可能变化，现场可在引擎页改（存 EngineCards.json）。
+            new EngineCardDefinition
+            {
+                Id = "deepseek-flash-magpie", Name = "DeepSeek V4.1 Flash",
+                // Gateway=magpie：卡片显示喜鹊品牌标，标题括号自动拼上游平台（workbuddy）；
+                // 平台名从 HttpModel 前缀解析（见 EngineCardDefinition.VendorName）。
+                Gateway = "magpie",
+                LicenseNote = "云端验证用 · 非离线部署",
+                IsBuiltin = true, Protocol = "openai",
+                HttpBaseUrl = "http://127.0.0.1:3425", HttpModel = "workbuddy/deepseek-v4.1-flash",
+                HttpTimeoutMs = 30000,
             },
         };
 
@@ -125,7 +150,9 @@ namespace AIris.Core.Detect
 
             // 协议初值：仅在 cfg 未带协议（新建/空配置）时按卡默认注入，已配置则尊重配置
             if (cfg != null && string.IsNullOrEmpty(cfg.Protocol)) cfg.Protocol = def.Protocol;
-            return new HttpDetectionEngine(def.Id, def.Name, def.LicenseNote);
+            // 显示名走 DisplayName：Magpie 卡自动带上游平台括号（"DeepSeek V4.1 Flash (workbuddy)"），
+            // 页头状态、审计日志、卡片标题三处口径一致
+            return new HttpDetectionEngine(def.Id, def.DisplayName, def.LicenseNote);
         }
 
         /// <summary>引擎卡默认推理协议（找不到卡时按自研契约兜底）。</summary>

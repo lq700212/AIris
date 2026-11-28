@@ -14,6 +14,9 @@
     <SolidColorBrush x:Key="ThemeTextFg" Color="#FF3A3230"/>
     <SolidColorBrush x:Key="ThemeTextMuted" Color="#FF9A8F86"/>
     <SolidColorBrush x:Key="ThemeBorder" Color="#FFF2E2D8"/>
+    <!-- 卡片悬停影子：浅色底用淡黑；暗色主题换更浓的黑（同键换值），
+         影子层 Background 绑这个键，主题切换自动跟随（2026-11-28） -->
+    <SolidColorBrush x:Key="ThemeCardShadow" Color="#33000000"/>
     <SolidColorBrush x:Key="ThemePrimary" Color="#FFF97316"/>
     <SolidColorBrush x:Key="ThemePrimary2" Color="#FFEC4899"/>
     <SolidColorBrush x:Key="ThemeAccent" Color="#FFEC4899"/>

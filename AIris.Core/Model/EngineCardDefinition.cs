@@ -30,6 +30,44 @@ namespace AIris.Core.Model
         /// <summary>是否内置卡（内置卡不可删除，只允许覆盖连接参数）。</summary>
         public bool IsBuiltin { get; set; }
 
+        /// <summary>
+        /// 网关标识（空 = 模型服务直连；"magpie" = 经 Magpie 反代网关接入）。
+        /// 【为什么需要】Magpie 是本地反代网关，一个网关后面挂着 workbuddy / trae-cn / zcode
+        /// 等多家上游平台；卡片要显示"经哪个平台"和喜鹊品牌标，不能靠端口/模型名猜
+        /// （vLLM 的模型名也可能是 owner/model 形式，猜错就把直连卡误标成反代卡）。
+        /// 由 EngineRegistry 内置卡与「添加引擎」弹窗的 Magpie 快捷区写入。
+        /// </summary>
+        public string Gateway { get; set; } = "";
+
+        /// <summary>
+        /// 上游提供方平台名：模型 id 的前缀（"workbuddy/deepseek-v4.1-flash" → "workbuddy"）。
+        /// 仅 Magpie 反代卡有意义；无前缀/直连卡返回空串。
+        /// </summary>
+        public string VendorName
+        {
+            get
+            {
+                if (!string.Equals(Gateway, "magpie", StringComparison.OrdinalIgnoreCase)) return "";
+                string model = HttpModel ?? "";
+                int slash = model.IndexOf('/');
+                return slash > 0 ? model.Substring(0, slash) : "";
+            }
+        }
+
+        /// <summary>
+        /// 卡片标题/引擎实例显示名：Magpie 卡把上游平台拼进括号
+        /// （"DeepSeek V4.1 Flash" + " (workbuddy)"），其他卡直接用 Name。
+        /// 页头状态、审计日志、卡片标题共用这一处口径，避免三处各拼各的。
+        /// </summary>
+        public string DisplayName
+        {
+            get
+            {
+                string vendor = VendorName;
+                return vendor.Length > 0 ? Name + " (" + vendor + ")" : Name;
+            }
+        }
+
         // —— 该卡独立的连接参数（切换时回填 EngineConfig / 推理参数表单） ——
 
         /// <summary>推理协议：openai / custom / ollama / anthropic（下拉四档，见落地指南 §2.3）。</summary>
@@ -57,6 +95,7 @@ namespace AIris.Core.Model
                 LicenseNote = LicenseNote,
                 IsMock = IsMock,
                 IsBuiltin = IsBuiltin,
+                Gateway = Gateway,
                 Protocol = Protocol,
                 HttpBaseUrl = HttpBaseUrl,
                 HttpModel = HttpModel,

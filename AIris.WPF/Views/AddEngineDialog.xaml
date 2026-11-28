@@ -18,11 +18,57 @@
                        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                        xmlns:ui="clr-namespace:Kaleidoscope.UI.Views;assembly=Kaleidoscope.UI"
+                       xmlns:assets="clr-namespace:AIris.WPF.Assets"
                        Title="添加检测引擎" Width="640" SizeToContent="Height" UseLayoutRounding="True" Resizeable="False" ShowMinButton="False" ShowMaxButton="False">
     <Border Background="{DynamicResource ThemePanelBg}" Padding="18,14,18,16">
         <StackPanel>
             <TextBlock Text="填写模型的推理服务信息；保存后追加为引擎卡，和内置卡一样可测试连接、切换。"
                        FontSize="11.5" Foreground="{DynamicResource ThemeTextMuted}" TextWrapping="Wrap" Margin="0,0,0,14"/>
+
+            <!-- ===== Magpie 反代快捷接入（2026-11-28）=====
+                 用户频繁在 Magpie 的不同模型间切换，手抄模型名易错（workbuddy/xxx 前缀 + 版本号）。
+                 这里直接拉 GET /v1/models 列表点选，选中即回填下方全部表单字段：
+                 名称=展示名、协议=OpenAI 兼容、地址=网关、模型名=完整 id。
+                 只把「图像」模型排前面并标注——纯文本模型检测出不了框。 -->
+            <Border Background="{DynamicResource ThemePrimaryDim}" CornerRadius="12" Padding="14,12,14,13" Margin="0,0,0,14">
+                <StackPanel>
+                    <Grid>
+                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                            <!-- Magpie 官方喜鹊 Logo（矢量，随主题换色；来源见 MagpieLogo.cs 头注释） -->
+                            <Viewbox Width="18" Height="18" Margin="0,0,7,0">
+                                <Path Data="{x:Static assets:MagpieLogo.Geometry}"
+                                      Fill="{DynamicResource ThemeTextFg}"/>
+                            </Viewbox>
+                            <TextBlock Text="Magpie 反代模型" FontSize="12.5" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource ThemeTextFg}" VerticalAlignment="Center"/>
+                        </StackPanel>
+                        <TextBlock Text="本地网关一键带入 · 自动填好下方表单" FontSize="10.5"
+                                   Foreground="{DynamicResource ThemeTextMuted}"
+                                   HorizontalAlignment="Right" VerticalAlignment="Center"/>
+                    </Grid>
+                    <Grid Margin="0,9,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*"/>
+                            <ColumnDefinition Width="10"/>
+                            <ColumnDefinition Width="Auto"/>
+                        </Grid.ColumnDefinitions>
+                        <TextBox x:Name="MagpieUrlBox" Style="{StaticResource AiInput}"
+                                 Text="http://127.0.0.1:3425"
+                                 ToolTip="Magpie 网关地址（默认本机 3425；局域网网关改成对应 IP）"/>
+                        <Button Grid.Column="2" x:Name="MagpieFetchBtn" Content="⟳ 拉取模型"
+                                Style="{StaticResource AiBtnSecondarySm}" MinWidth="104"
+                                Click="MagpieFetch_Click"
+                                ToolTip="GET /v1/models：列出网关已接入的模型（按图像能力排序）"/>
+                    </Grid>
+                    <ComboBox x:Name="MagpieModelCombo" Style="{StaticResource AiCombo}" Margin="0,8,0,0"
+                              IsEnabled="False" DisplayMemberPath="Label"
+                              SelectionChanged="MagpieModel_SelectionChanged"
+                              ToolTip="选中即回填名称/协议/地址/模型名；纯文本模型不能用于检测"/>
+                    <TextBlock x:Name="MagpieHint" FontSize="10.5" Foreground="{DynamicResource ThemeTextMuted}"
+                               TextWrapping="Wrap" Margin="0,7,0,0"
+                               Text="点「拉取模型」→ 选择一个模型，下方表单自动填好，再点「添加引擎」即可。"/>
+                </StackPanel>
+            </Border>
 
             <Grid>
                 <Grid.ColumnDefinitions>

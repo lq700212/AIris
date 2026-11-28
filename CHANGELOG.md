@@ -2,6 +2,94 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.20（2026-11-28）Magpie 反代接入 + 启动卡顿治本 + 引擎页交互收口：DeepSeek V4.1 Flash 内置卡 + KxBackground 后台门面 + 牌堆悬浮重做
+
+> **定位声明**：本条是**云端模型验证链路**，违反项目「全本地离线部署」定位——仅用于
+> 开发机低配环境先跑通"真实模型 → 出框 → 判定 → 审计"全流程，卡上明确标注
+> 「云端验证用 · 非离线部署」，现场交付仍以本地模型为准。
+
+### 一、为什么走 Magpie 反代
+
+- 本机 4GB 显存跑不动视觉模型：LocateAnything-3B 需约 11.7GB 显存 + Ampere 以上架构
+  + Linux/WSL2 + 32GB 内存（落地指南 §2.9）；Qwen2.5-VL-3B（Ollama）43% 层卸载到 CPU，
+  单帧 12~40s，且弱模型输出 label 恒为 `"name"`、框位置无效——全流程演示一帧都等不到。
+- Magpie（`yetone/magpie`，本机 `magpie-windows-amd64.exe`，监听 `127.0.0.1:3425`）是
+  **本地反代网关**：把 workbuddy / zcode / trae-cn 等多家云端模型统一成 OpenAI 兼容信封
+  （`/v1/chat/completions` + `/v1/models`）。因此**不需要新增任何 HTTP 传输器**，
+  直接复用 Kaleidoscope 的 `OpenAiTransport`（协议 `openai`）。
+- 实测 DeepSeek V4.1 Flash：纯文本 2.2s、带图 grounding 2.2~4.0s（全尺寸 2304×1296 4.0s），
+  token 约 1100/次，`bbox_2d` JSON 与中文 label 均正常。
+
+### 二、模型目录发现沉库（同步沉淀 Kaleidoscope V2.4.7）
+
+- **新增 `Kaleidoscope/Infer/InferModelCatalog.cs` + `InferClient.ListModelsAsync`**：
+  OpenAI 兼容 `GET /v1/models`（vLLM / llama.cpp / LMDeploy / Magpie 通用）、
+  Ollama `GET /api/tags`、Anthropic `/v1/models` 统一解析为 `InferModelInfo`
+  （id / 展示名 / owner / 图像能力三态），视觉模型自动排前。
+- **图像能力三态**（`ImageSupportKnown`）：Magpie 每项带 `modalities.input` 可确定；
+  OpenAI 官方 / Ollama 不声明 → 标"能力未知"，UI 不误判成"纯文本"挡掉可用模型。
+- **宿主删掉自建的 `AIris.Core\Detection\MagpieCatalog.cs`**（能力全部改走库入口，
+  不留新旧两套解析——"换服务只换 `InferEndpoint`"）。
+- **`BuildGroundingPrompt` 两处修正**（实测纯中文类目被忽略）：补中英同义词提示
+  （杯子=cup / 手机=cell phone）+ 要求 label 用目标原名（弱模型会照抄示例 `"name"`，
+  导致 `JudgeEngine` 按 label 匹配永远数不到件）。
+
+### 三、界面（对照设计稿 C 方案）
+
+- **引擎页推理参数卡**：「服务模型名」标签右侧新增「Magpie 模型」按钮（喜鹊图标 +
+  文字）→ 拉取 `/v1/models` → 提示行（数量 / 图像能力统计）→ 胶囊列表（带 owner
+  区分同名模型的不同提供方）→ 点选自动回填**协议 + 地址 + 模型名**。
+- **添加引擎弹窗**：顶部新增 Magpie 快捷区（主题色卡片）——地址框 + 「⟳ 拉取模型」+
+  模型下拉 + 提示行；选中模型自动填好整张表单（名称=展示名、许可证="云端验证用 ·
+  非离线部署"、协议=OpenAI 兼容、地址=网关、模型名=完整 id）。
+- **喜鹊图标**：官方 SVG（`magpie-small.svg`，44×44 单 path）转 WPF `Geometry`
+  内联到 `AIris.WPF\Assets\MagpieLogo.cs`，`Fill={DynamicResource ThemeTextFg}`
+  随明暗主题自动换色，无需两套 PNG。
+- **拉取改 async void**（`ConfigureAwait(true)` 回 UI 线程）：本机 38ms，远程网关可能
+  到 3s，同步 `GetResult()` 会冻结整个界面（违反"UI 线程禁做网络 IO"红线）；异常全部
+  就地转提示文本，防 async void 崩进程；拉取中按钮禁用防连点。
+
+### 四、内置引擎卡
+
+- `EngineRegistry.Builtin` 新增 `deepseek-flash-magpie`：名称「DeepSeek V4.1 Flash
+  (Magpie)」、协议 `openai`、地址 `http://127.0.0.1:3425`、模型
+  `workbuddy/deepseek-v4.1-flash`、超时 30000ms、许可证胶囊「云端验证用 · 非离线部署」。
+
+### 五、验证
+
+- 库探针：`ListModelsAsync` → Magpie 38ms 返回 12 个模型（11 个确认支持图像 +
+  1 个纯文本沉底），owner 与图像标记全对；
+- 引擎页实点：点「Magpie 模型」→ 12 个胶囊 3 行 → 点「DeepSeek-V4.1-Flash · workbuddy」
+  → 协议切 OpenAI 兼容、地址切 3425、模型名填 `workbuddy/deepseek-v4.1-flash`；
+- 添加引擎弹窗实点（明/暗两套主题）：「⟳ 拉取模型」→ 下拉自动选第一个视觉模型 →
+  名称/许可证/协议/地址/模型名一次填好，喜鹊图标随主题换色正常。
+
+### 六、引擎页交互收口与牌堆悬浮重做
+
+- **切换引擎去掉确认弹窗**（用户定版）：展开态点非当前牌 = 直接切换并自动收拢；
+  删除 `IAppHost.ShowEngineSwitch` 接口与实现、`EngineCardVm.SwitchCommand` 死代码，
+  `EngineViewModel.SwitchTo` 由异步确认改 void 直切；点当前牌 / 点空白 = 收拢。
+- **Tooltip 范围修正**：只删除引擎卡片上的 2 处（服务参数行、删除按钮），
+  AddEngineDialog 9 处与 EnginePage 表单/页头 7 处全部恢复，其余 6 个文件回滚——
+  上一轮全仓正则误删 48 处/8 文件，教训记入操作纪律。
+- **Magpie 反代卡标注上游平台**：`EngineCardDefinition` 新增 `Gateway`（反代平台标记）+
+  `VendorName`/`DisplayName`（`Name (平台)`），Clone 同步复制；内置 Magpie 卡
+  `Gateway="magpie"`；`AddEngineDialog` 从 Magpie 快捷区点选后保存也标记 `Gateway`；
+  卡片标题拆成「模型名（13px 粗）+ 平台括号（11px 灰）」，长平台名不再挤掉主名；
+  许可证行右侧加喜鹊矢量标 + `Magpie` 小字（仅 `IsMagpie` 卡显示，主题色跟随）。
+- **牌堆悬浮重做（"看着怪"三根因全修）**：
+  ① 投影不再挂牌面——`DropShadowEffect` 会把整卡（含文字）先渲染成位图、
+     ClearType 失效，悬停时文字明显发虚；改为模板内独立影子层（纯色圆角 Border，
+     索引 0）淡入 + 懒挂 `BlurEffect(16)`，牌面文字始终 1:1 清晰；
+  ② 命中区与视觉层分离——外层透明 Grid 固定不动，只让牌面上浮，杜绝
+     "上浮→下边缘脱离鼠标→MouseLeave→回弹"的无限抖动；
+  ③ 收拢态只微浮 2px（一叠纸，浮太多和纸边脱节），展开态浮 6px（"拿起一张"）；
+  影子浓淡走主题键 `ThemeCardShadow`（浅色 `#33000000` / 暗色 `#99000000`，
+  暗色底上淡黑完全看不见）；`Relayout` 前 `ClearHover()` 清残留，
+  避免切换后某张牌带着 -6px 位移和影子被收拢、下次展开"凭空浮着"。
+- **验证**：构建 0 error；浅色/暗色两套截图目检——收拢态微浮 + 淡影、展开态
+  上浮 6px + 柔和影子、文字边缘锐利无发虚；实际模型保持用户所选的 Qwen2.5-VL-3B 不动。
+
 ## V0.1.19（2026-11-28）监控画面链路整改与模型接入：KxFrameSurface 库件接入 + 渲染策略库化 + 限流离散化修正（9fps→20fps、呈现层零额外延时）
 
 ### 一、问题：真机 RTSP 5MP@8fps 单核 63.4%，视频明显卡顿

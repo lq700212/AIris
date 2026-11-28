@@ -2,7 +2,9 @@ using System;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.Runtime.InteropServices;
+using System.Threading.Tasks;
 using AIris.Core.Model;
+using Kaleidoscope.Threading;
 using OpenCvSharp;
 using YoloDetection;
 
@@ -34,6 +36,12 @@ namespace AIris.Core.Camera
         private RtspFrameCapturer _capturer;
         private volatile bool _connected;
         private volatile bool _stopping;
+
+        /// <summary>连接/停止互斥（后台连接线程与 Stop/Dispose 可能并发）。</summary>
+        private readonly object _sync = new object();
+
+        /// <summary>后台连接进行中（防重入：Start 连点/热切换不会开出两条连接）。</summary>
+        private bool _starting;
 
         /// <summary>相机显示名（设备页/监控台顶栏用）。</summary>
         public string Name { get { return _name; } }
@@ -137,14 +145,26 @@ namespace AIris.Core.Camera
         }
 
         /// <summary>
-        /// 打开 RTSP 流并启动后台捕获线程。
+        /// 打开 RTSP 流（**后台线程连接**，立即返回）并启动捕获。
+        ///
+        /// 【为什么后台连接（2026-11-28 启动卡顿整改）】
+        /// cap.Start 内部要完成 RTSP OPTIONS/DESCRIBE/SETUP/PLAY 四步握手，相机不在线时
+        /// 同步阻塞到 TCP 超时（现场 192.168.1.188 实测 20s+）。本方法由启动链
+        /// App.OnStartup → ServiceHub.Monitor.Start 在 UI 线程调用——旧版整窗"鼠标转圈"。
+        /// 现改后台线程：Start 立即返回，连接结果由日志 + IsConnected 体现
+        /// （顶栏状态胶囊 1s 轮询自动更新）。
+        ///
         /// 失败（地址错/网络不可达/相机未开流）不抛异常：置 IsConnected=false + 记日志，
         /// 监控台据此显示"相机离线"而不是崩溃。
         /// </summary>
         public void Start()
         {
-            if (_capturer != null) return;
-            _stopping = false;
+            lock (_sync)
+            {
+                if (_capturer != null || _starting) return;   // 已连接 / 连接中，防重入
+                _starting = true;
+                _stopping = false;
+            }
 
             var cap = new RtspFrameCapturer();
             // 解码后立即下采样（0=不下采样）：见 MaxPixelWidth 注释——这是消除
@@ -152,41 +172,61 @@ namespace AIris.Core.Camera
             cap.MaxPixelWidth = MaxPixelWidth;
             cap.FrameReady += OnFrameReady;
 
-            bool ok;
-            try
+            // KxBackground.Run：统一后台出口（异常必达宿主日志；裸 Task 的异常会被静默吞）。
+            KxBackground.Run("camera.rtsp.connect", () =>
             {
-                ok = cap.Start(_url);
-            }
-            catch (Exception ex)
-            {
-                cap.FrameReady -= OnFrameReady;
-                try { cap.Dispose(); } catch { }
-                _connected = false;
-                OnLog("RTSP 相机启动异常：" + ex.Message);
-                return;
-            }
+                bool ok;
+                try
+                {
+                    ok = cap.Start(_url);
+                }
+                catch (Exception ex)
+                {
+                    cap.FrameReady -= OnFrameReady;
+                    try { cap.Dispose(); } catch { }
+                    lock (_sync) { _starting = false; _connected = false; }
+                    OnLog("RTSP 相机启动异常：" + ex.Message);
+                    return;
+                }
 
-            if (!ok)
-            {
-                cap.FrameReady -= OnFrameReady;
-                try { cap.Dispose(); } catch { }
-                _connected = false;
-                OnLog("RTSP 相机连接失败：" + _url + "（检查 IP/端口/通道与相机 RTSP 开关）");
-                return;
-            }
+                bool discard;
+                lock (_sync)
+                {
+                    _starting = false;
+                    // 连接期间已被 Stop（或启动失败）：本次结果作废并释放
+                    discard = _stopping || !ok;
+                    if (!discard)
+                    {
+                        _capturer = cap;
+                        _connected = true;
+                    }
+                }
 
-            _capturer = cap;
-            _connected = true;
-            OnLog("RTSP 相机已连接：" + _url);
+                if (discard)
+                {
+                    cap.FrameReady -= OnFrameReady;
+                    try { cap.Stop(); } catch { }
+                    try { cap.Dispose(); } catch { }
+                    if (!ok && !_stopping)
+                        OnLog("RTSP 相机连接失败：" + _url + "（检查 IP/端口/通道与相机 RTSP 开关）");
+                    return;
+                }
+
+                OnLog("RTSP 相机已连接：" + _url);
+            });
         }
 
         /// <summary>停止捕获并释放（有界等待，卡死线程交由捕获器内部已知泄漏策略处理）。</summary>
         public void Stop()
         {
-            _stopping = true;
+            RtspFrameCapturer cap;
+            lock (_sync)
+            {
+                _stopping = true;
+                cap = _capturer;
+                _capturer = null;
+            }
 
-            var cap = _capturer;
-            _capturer = null;
             if (cap != null)
             {
                 cap.FrameReady -= OnFrameReady;
@@ -196,6 +236,8 @@ namespace AIris.Core.Camera
 
             if (_connected) OnLog("RTSP 相机已断开：" + _url);
             _connected = false;
+            // 注意：_starting 不在这里清——后台连接线程完成时会看到 _stopping=true
+            // 自行释放并清标记；强行清会让新 Start 与在途连接撞车（两条连接互相覆盖）。
         }
 
         public void Dispose() { Stop(); }

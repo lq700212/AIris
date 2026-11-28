@@ -24,9 +24,6 @@ namespace AIris.WPF.Services
         /// <summary>NG 详情弹窗（主界面告警卡"NG 详情…"）。</summary>
         void ShowNgDetail(VerdictEventArgs verdict, AIris.Core.Model.Recipe recipe);
 
-        /// <summary>引擎切换确认弹窗；返回是否确认切换。</summary>
-        bool ShowEngineSwitch(EngineCardDefinition card);
-
         /// <summary>添加检测引擎弹窗（自定义模型接入）；返回是否创建成功。</summary>
         bool ShowAddEngine();
 
@@ -289,19 +286,6 @@ namespace AIris.WPF.Services
                 var dlg = new Views.NgDetailDialog(verdict, recipe);
                 dlg.Owner = Owner();
                 dlg.ShowDialog();
-            }
-
-            public bool ShowEngineSwitch(EngineCardDefinition card)
-            {
-                string mockNote = MockMode
-                    ? "\r\n\r\n当前为 Mock 数据模式：确认切换将同时关闭 Mock（相机切回设备页配置的真实相机）。"
-                    : "";
-                return Confirm("切换检测引擎",
-                    "切换到 " + card.Name + " 将卸载当前引擎并重新加载。\r\n许可证：" + card.LicenseNote
-                    + "\r\n服务参数：" + card.Protocol + " · " + card.HttpBaseUrl + " · " + card.HttpModel
-                    + "\r\n未接入时检测本轮暂停（不出框、不落审计，信息行会标注「不可达」）。"
-                    + mockNote,
-                    "确认切换", false);
             }
 
             public bool ShowAddEngine()

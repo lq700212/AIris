@@ -7,6 +7,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using AIris.Core.Model;
 using Kaleidoscope.Infer;
+using Kaleidoscope.Threading;
 
 namespace AIris.Core.Detect
 {
@@ -31,6 +32,13 @@ namespace AIris.Core.Detect
         private readonly InferClient _client = new InferClient();
 
         private EngineConfig _cfg;
+
+        /// <summary>
+        /// Load 代际号（2026-11-28 启动卡顿整改）：
+        /// 每次 Load 递增；后台探活完成时只有"仍是最新一次 Load"才允许写 IsLoaded，
+        /// 防止切卡瞬间旧卡探活慢返回把新卡状态覆盖掉。
+        /// </summary>
+        private int _loadGeneration;
 
         // 降级日志节流：检测线程每 300ms 一帧，服务持续不可达时同因 5s 内只记一条
         private string _lastDegradedReason;
@@ -63,23 +71,53 @@ namespace AIris.Core.Detect
         public EngineStats Stats { get; } = new EngineStats();
         public event Action<string> Log;
 
+        /// <summary>
+        /// 装载连接参数并**后台**探活（2026-11-28 启动卡顿整改）。
+        ///
+        /// 【为什么改异步】Load 的调用点全在 UI 线程：
+        ///   · 启动装配 ServiceHub.Install → RunMonitor.SwapEngine → Load
+        ///   · 切卡确认 EngineViewModel.SwitchTo → SwapEngine → Load
+        /// 旧版这里 ProbeAsync(...).GetAwaiter().GetResult() 同步等 HTTP 响应，
+        /// 服务不在线时窗口整段"鼠标转圈"——Magpie 卡超时 30s 时就是 30 秒假死。
+        /// 现改为后台线程探活：Load 立即返回，UI 永远不卡。
+        ///
+        /// 【状态怎么回填】探活成功后置 IsLoaded=true；顶栏状态胶囊（MainViewModel
+        /// 1s 轮询）与引擎页状态行（EngineViewModel 页面计时器）会自动读到，无需事件。
+        /// 探活失败不抛异常，检测线程按既有降级语义跳过本轮（不出框、不落审计）。
+        /// </summary>
         public void Load(EngineConfig cfg)
         {
             _cfg = cfg;
-            // 同步探活（检测线程/VM 上下文均可等 2s；失败不抛降级）
-            try
+            IsLoaded = false;   // 后台探活完成前先按"未就绪"呈现，避免上一张卡的状态残留
+
+            int gen = Interlocked.Increment(ref _loadGeneration);
+            var ep = BuildEndpoint(cfg);
+            string name = _name;
+            string proto = cfg.Protocol;
+
+            // KxBackground.Run：统一后台出口（异常必达宿主日志；裸 Task 的异常会被静默吞）。
+            KxBackground.Run("engine.probe", () =>
             {
-                var ep = BuildEndpoint(cfg);
-                var probe = _client.ProbeAsync(ep, CancellationToken.None).GetAwaiter().GetResult();
-                IsLoaded = probe.Ok;
-                OnLog("[" + _name + "] " + cfg.Protocol + " 协议探活 " + ep.BaseUrl + " → "
-                    + (probe.Ok ? "在线（" + probe.LatencyMs + "ms）" : "不可达：" + probe.Error));
-            }
-            catch (Exception ex)
-            {
-                IsLoaded = false;
-                OnLog("[" + _name + "] 探活异常：" + ex.Message);
-            }
+                bool ok;
+                string detail;
+                try
+                {
+                    var probe = _client.ProbeAsync(ep, CancellationToken.None).GetAwaiter().GetResult();
+                    ok = probe.Ok;
+                    detail = ok ? "在线（" + probe.LatencyMs + "ms）" : "不可达：" + probe.Error;
+                }
+                catch (Exception ex)
+                {
+                    ok = false;
+                    detail = "探活异常：" + ex.Message;
+                }
+
+                // 切卡竞态：探活期间又 Load 了别的卡 → 本次结果作废，不覆盖新卡状态
+                if (Volatile.Read(ref _loadGeneration) != gen) return;
+
+                IsLoaded = ok;
+                OnLog("[" + name + "] " + proto + " 协议探活 " + ep.BaseUrl + " → " + detail);
+            });
         }
 
         public async Task<DetectResult> DetectAsync(Bitmap frame, IList<string> prompts, CancellationToken ct)

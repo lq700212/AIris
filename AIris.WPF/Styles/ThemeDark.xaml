@@ -12,6 +12,8 @@
     <SolidColorBrush x:Key="ThemeTextFg" Color="#FFEDE6EF"/>
     <SolidColorBrush x:Key="ThemeTextMuted" Color="#FFA08FA8"/>
     <SolidColorBrush x:Key="ThemeBorder" Color="#FF3F2A52"/>
+    <!-- 卡片悬停影子：暗色底上淡黑看不见，换 60% 黑才压得出层次（键集与浅色一致） -->
+    <SolidColorBrush x:Key="ThemeCardShadow" Color="#99000000"/>
     <SolidColorBrush x:Key="ThemePrimary" Color="#FFF97316"/>
     <SolidColorBrush x:Key="ThemePrimary2" Color="#FFEC4899"/>
     <SolidColorBrush x:Key="ThemeAccent" Color="#FFEC4899"/>
