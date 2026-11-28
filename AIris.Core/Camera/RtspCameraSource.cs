@@ -44,6 +44,42 @@ namespace AIris.Core.Camera
         /// <summary>实际拉流地址（调试/日志用）。</summary>
         public string Url { get { return _url; } }
 
+        /// <summary>
+        /// 帧率上限（0 = 不限，默认 0）。
+        ///
+        /// 为什么需要：相机实际输出频率可能远高于业务需要——安格华 2592×1944 实测
+        /// 回调 20fps（配置写 8fps 不代表实际输出），而全量消费时 MatToBitmap 约
+        /// 3.5ms + UI 推帧回调约 14.5ms/帧，20fps 下仅这条链路就占单核约 36%。
+        /// 监控台显示 12fps 已足够流畅，限流后 CPU 直降约 40%。
+        ///
+        /// 限流位置在 Mat 转换<b>之前</b>：省的是整条"转换 + 推帧"成本，不是只省渲染。
+        /// 由宿主按场景设置（ServiceHub 创建时设 12），不在本类硬编码。
+        /// </summary>
+        public int MaxFps { get; set; }
+
+        /// <summary>
+        /// 解码后立即下采样的目标宽度（0 = 不下采样，默认）。
+        ///
+        /// 【为什么放在捕获器而不是 UI 层（2026-11-28 延时优化）】
+        /// 相机 5MP 主码流下，若把全尺寸图往下传，每帧要多做三次大图操作：
+        /// Clone(9MB) + Mat→Bitmap(9MB) + 呈现面 box filter，合计 10~15ms。
+        /// 这段开销把消费速率压到相机生产速率之下 → RTSP 缓冲永久积压 →
+        /// 画面延时随运行时间固定增大（AIris 实测 789ms，消费 10.1fps vs 生产 20fps）。
+        /// 在解码输出处一次性 resize（INTER_AREA 2~3ms）后，整条链路只处理小图。
+        ///
+        /// 【口径】设置后 CameraFrame.Image 与信息行分辨率都按<b>下采样后</b>尺寸报告；
+        /// 检测精度在 1600 宽下与全尺寸无实质差异（ROI-IoU 几何判定不依赖像素级细节）。
+        /// 【时机】Start 前设置；运行期改动只影响后续帧。
+        /// </summary>
+        public int MaxPixelWidth { get; set; }
+
+        /// <summary>
+        /// 下次允许接受帧的 Stopwatch 时间戳（MaxFps 时间片累加用；0 = 尚未初始化）。
+        /// 每接受一帧就 += 1000/MaxFps，保证长期平均帧率精确等于 MaxFps，
+        /// 不受"相机帧间隔与限流周期不对齐"影响（详见 OnFrameReady 内的算法注释）。
+        /// </summary>
+        private long _nextAcceptTimestamp;
+
         /// <summary>帧到达（捕获线程触发；帧归消费方 Dispose）。</summary>
         public event Action<CameraFrame> FrameArrived;
 
@@ -111,6 +147,9 @@ namespace AIris.Core.Camera
             _stopping = false;
 
             var cap = new RtspFrameCapturer();
+            // 解码后立即下采样（0=不下采样）：见 MaxPixelWidth 注释——这是消除
+            // "消费速率低于相机生产速率 → 缓冲永久积压 → 固定大延时"的关键一环。
+            cap.MaxPixelWidth = MaxPixelWidth;
             cap.FrameReady += OnFrameReady;
 
             bool ok;
@@ -173,6 +212,42 @@ namespace AIris.Core.Camera
             {
                 mat.Dispose();
                 return;
+            }
+
+            // 帧率上限：相机实际输出可能远高于业务需要（安格华 5MP 实测 20fps），
+            // 超出的帧在转换前丢弃——MatToBitmap + UI 推帧合计约 18ms/帧，限流直接省 CPU。
+            //
+            // 【算法：时间片累加，而不是"距上次 ≥ 1000/fps"（2026-11-28 修正）】
+            // 旧写法在固定帧间隔输入下会系统性少收：20fps 输入（帧间隔 50ms）限流 12fps
+            // 时，判据是"距上次接受 ≥ 83.3ms"→ 50ms 被拒、100ms 才收 → 实际只有 10fps，
+            // 且节拍 100ms 一停一顿（AIris 实测信息行 9fps，误以为是解码积压，排查半天）。
+            // 现在改成"下次允许接受的时刻"累加时间片：接受一帧就把 next += 1000/fps，
+            // 于是 20fps 输入限流 12fps = 每 5 帧收 3 帧，长期平均精确 12fps。
+            // 长时间没帧（断流重连）时 next 会落后很多，用"落后超过 2 个时间片就重置"
+            // 防止恢复瞬间连收一串。
+            int maxFps = MaxFps;
+            if (maxFps > 0)
+            {
+                long nowTicks = System.Diagnostics.Stopwatch.GetTimestamp();
+                long intervalTicks = System.Diagnostics.Stopwatch.Frequency / maxFps;
+                if (intervalTicks < 1) intervalTicks = 1;
+
+                if (_nextAcceptTimestamp == 0)
+                {
+                    _nextAcceptTimestamp = nowTicks;
+                }
+
+                if (nowTicks < _nextAcceptTimestamp)
+                {
+                    mat.Dispose();
+                    return;
+                }
+
+                _nextAcceptTimestamp += intervalTicks;
+                if (_nextAcceptTimestamp < nowTicks - intervalTicks * 2)
+                {
+                    _nextAcceptTimestamp = nowTicks + intervalTicks;
+                }
             }
 
             Bitmap bmp = null;

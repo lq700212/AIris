@@ -89,7 +89,7 @@ namespace AIris.WPF.ViewModels
         public string MockButtonText { get { return _mockMode ? "Mock 数据 · 开" : "Mock 数据"; } }
 
         private string _engineIndicator = "引擎 —";
-        /// <summary>顶栏引擎态胶囊文本：在线 / 回落 Mock / Mock 演示 / 未接入。
+        /// <summary>顶栏引擎态胶囊文本：在线 / 检测暂停 / Mock 演示 / 未接入。
         /// 不能写死"引擎 在线"——切到未接入的引擎后，顶栏会与引擎页状态自相矛盾。</summary>
         public string EngineIndicator
         {
@@ -199,7 +199,8 @@ namespace AIris.WPF.ViewModels
             }
             else
             {
-                EngineStatus = "warn"; EngineIndicator = "引擎 回落 Mock";
+                // 引擎未接入：检测本轮跳过（不出框、不落审计），顶栏如实显示"暂停"
+                EngineStatus = "warn"; EngineIndicator = "引擎 检测暂停";
             }
 
             var cam = monitor.Camera;

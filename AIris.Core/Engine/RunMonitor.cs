@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Drawing;
 using System.Drawing.Imaging;
 using System.IO;
@@ -30,7 +31,7 @@ namespace AIris.Core.Engine
     public class RunStateEventArgs : EventArgs
     {
         public bool Running { get; set; }
-        /// <summary>一句话状态（"运行中 · 单帧 430 ms · 批处理 61 ms/帧" / "引擎未接入，当前 Mock 演示"）。</summary>
+        /// <summary>一句话状态（"运行中 · 单帧 430 ms · 批处理 61 ms/帧" / "引擎不可达，检测暂停"）。</summary>
         public string StatusLine { get; set; } = "";
         /// <summary>今日 OK / NG 计数（监控台底栏）。</summary>
         public int OkCount { get; set; }
@@ -40,7 +41,7 @@ namespace AIris.Core.Engine
     /// <summary>
     /// 运行编排（落地指南 §一 架构总览的"采集层+检测服务+规则判定+工步引擎"粘合层，AIris Core 唯一运行态）：
     ///  相机线程: FrameArrived → 换 latestFrame + 唤醒
-    ///  检测线程: 取 latestFrame → DetectAsync(prompts) → 失败降级（HTTP 引擎未接入回落 Mock 出框）
+    ///  检测线程: 取 latestFrame → DetectAsync(prompts) → 失败则本轮跳过判定（不出框、不落审计）
     ///           → JudgeEngine 判定 → WorkstepEngine.Feed（稳定帧累计）→ 最终结论落审计 + 截图
     /// 演示控制（无相机无模型跑通全流程）：Place/Remove 零件驱动 MockScene，Recheck 重检当前步。
     /// 线程约定：所有事件在检测线程抛出，UI 订阅方自行 Dispatcher 调度。
@@ -69,9 +70,9 @@ namespace AIris.Core.Engine
         private IDetectionEngine _inUseEngine;
         private IDetectionEngine _pendingDispose;
 
-        // —— 实际执行者（降级可见化：画面信息行/日志/审计要写真实出框者，不能只写"选了谁"） ——
-        private string _lastExecName = "";      // 本帧实际执行引擎（回落时为 "X→Mock"）
-        private long _lastExecMs;               // 本帧实际执行耗时（含回落替身）
+        // —— 实际执行者（画面信息行/日志/审计要写真实出框者，不能只写"选了谁"） ——
+        private string _lastExecName = "";      // 本帧实际执行引擎（不可达时为 "X（不可达）"）
+        private long _lastExecMs;               // 本帧实际执行耗时（0 = 本轮跳过）
 
         // —— 运行态 ——
         private volatile bool _running;
@@ -145,7 +146,8 @@ namespace AIris.Core.Engine
             if (_running) return;
             _running = true;
             _stop = false;
-            _previewOnly = false;   // 编辑页预览态自动退出（帧统一走 DetectLoop 透传，防双发）
+            _previewOnly = false;   // 编辑页预览态自动退出（帧统一走相机线程直通，防双发）
+            _lastInfoLine = BuildInfoLine();   // 首帧信息行（相机线程直通读，避免空串）
             _cam.Start();
             _detectThread = new Thread(DetectLoop) { IsBackground = true, Name = "AIrisDetect" };
             _detectThread.Start();
@@ -225,9 +227,10 @@ namespace AIris.Core.Engine
             if (next == null) return;
 
             IDetectionEngine disposeNow = null;
+            IDetectionEngine old;
             lock (_engineSync)
             {
-                var old = _engine;
+                old = _engine;
                 _engine = next;
                 _lastExecName = "";     // 信息行立刻退回新引擎名，下一帧检测再写实际执行者
                 _lastExecMs = 0;
@@ -251,10 +254,13 @@ namespace AIris.Core.Engine
             }
             if (disposeNow != null) { try { disposeNow.Dispose(); } catch { } }
 
-            next.Log += m => RaiseLog("[引擎] " + m);   // 新实例专属订阅，不与旧实例串线（接口事件只能 +=）
+            // 新实例专属订阅，不与旧实例串线（接口事件只能 +=，lambda 退不掉）。
+            // 同一实例不重复订阅：构造时已订阅一次，ServiceHub 随即用同一实例调 SwapEngine
+            // 装载参数——无条件再挂一次会让每条引擎日志打两遍（2026-11-28 实测）。
+            if (!ReferenceEquals(old, next)) next.Log += m => RaiseLog("[引擎] " + m);
             next.Load(cfg);
-            RaiseState("引擎：" + _engine.Name + (_engine.IsLoaded ? "（已就绪）" : "（未接入，检测回落 Mock 演示）"));
-            RaiseLog("[引擎] 切换 → " + next.Name + (next.IsLoaded ? "（加载成功）" : "（未接入，检测回落 Mock 演示）"));
+            RaiseState("引擎：" + _engine.Name + (_engine.IsLoaded ? "（已就绪）" : "（未接入，检测暂停）"));
+            RaiseLog("[引擎] 切换 → " + next.Name + (next.IsLoaded ? "（加载成功）" : "（未接入，检测暂停）"));
         }
 
         /// <summary>检测线程收尾：清在途标记；切换遗留的旧引擎此刻已无调用者，安全释放。</summary>
@@ -278,11 +284,11 @@ namespace AIris.Core.Engine
         public WorkstepEngine Steps { get { return _steps; } }
         public Recipe Recipe { get { return _recipe; } }
 
-        /// <summary>最近一帧实际执行引擎（未接入回落时为 "Qwen3-VL-8B→Mock"；尚未检测为空串）。
+        /// <summary>最近一帧实际执行引擎（不可达时为 "Qwen3-VL-8B（不可达）"；尚未检测为空串）。
         /// UI 用它显示真实出框者——不能把"配置选了谁"当成"实际跑了谁"。</summary>
         public string LastExecEngineName { get { return _lastExecName; } }
 
-        /// <summary>最近一帧实际执行耗时（回落时是 Mock 替身的耗时）。</summary>
+        /// <summary>最近一帧实际执行耗时（引擎不可达/跳过判定时为 0）。</summary>
         public long LastExecElapsedMs { get { return _lastExecMs; } }
 
         /// <summary>审计/日志用的执行者标签：优先实际执行者，未检测过退回当前引擎名。</summary>
@@ -369,6 +375,35 @@ namespace AIris.Core.Engine
         {
             if (_previewOnly) return;   // 纯预览态：帧走 OnFramePreview 直通，不进检测队列
 
+            // —— 实测分辨率/帧率（信息行显示真实值，不写死） ——
+            // 旧版信息行硬编码 "2592 × 1944 · 8 fps"，与实际流（2304×1296 ≈ 23fps）不符，
+            // 现场据此判断"卡不卡/延时大不大"会得出错误结论。相机线程写、检测线程读，int 赋值原子。
+            if (frame.Image != null)
+            {
+                _frameW = frame.Image.Width;
+                _frameH = frame.Image.Height;
+            }
+            _fpsWindowCount++;
+            long fpsNow = Stopwatch.GetTimestamp();
+            double fpsElapsedMs = (fpsNow - _fpsWindowStart) * 1000.0 / Stopwatch.Frequency;
+            if (fpsElapsedMs >= 1000)
+            {
+                // ×10 存整数（volatile 友好），显示时再除 10
+                _fpsTimes10 = (int)Math.Round(_fpsWindowCount * 10000.0 / fpsElapsedMs);
+                _fpsWindowStart = fpsNow;
+                _fpsWindowCount = 0;
+            }
+
+            // 画面直通 UI（2026-11-28 卡顿根因修复）：
+            //   旧实现把画面刷新放在 DetectLoop 里，节奏是"刷一帧 → 同步等检测 → 再刷下一帧"，
+            //   检测慢多少画面就卡多少——真实引擎 HTTP 超时 6s 时画面 6s 才刷新一帧，
+            //   相机 8fps 的帧全被 _latest 覆盖丢弃（用户看到的就是"卡"）。
+            //   现在相机线程每帧直通 FrameReady：UI 侧 PushBitmapFrame 在调用线程同步拷像素
+            //   （KxFrameSurface 内部缓冲，不碰 WPF/UI 线程）后立即返回，画面帧率只取决于相机；
+            //   检测结果/信息行用缓存引用传递，引用不变时 UI 侧去重，不产生额外 Dispatcher 排队。
+            //   帧随后进 _latest 供检测线程使用，生命周期不变（检测线程用完 Dispose）。
+            RaiseFrame(frame.Image, _lastDetections, _lastInfoLine, frame.IsEmptyScene);
+
             // 相机线程只做"换帧 + 唤醒"，慢活全在检测线程（相机线程零阻塞）
             lock (_frameSync)
             {
@@ -393,10 +428,8 @@ namespace AIris.Core.Engine
                 try
                 {
                     _liveFrame = frame;
-                    // UI 刷画面（带上一轮框叠加；框为空时只刷画面；空场标记透传供 UI 回空态）
-                    RaiseFrame(frame.Image, _lastDetections, BuildInfoLine(), frame.IsEmptyScene);
-
-                    // 未运行 或 无配方：只刷画面，不判定
+                    // 画面已由相机线程在 OnFrame 里直通（帧率与检测解耦：检测慢不拖画面）；
+                    // 本循环只做判定。未运行 或 无配方：直接跳过检测。
                     if (!_running || _recipe == null) continue;
 
                     // 检测节拍
@@ -406,7 +439,7 @@ namespace AIris.Core.Engine
                     var step = _steps.CurrentStep;
                     if (step == null) continue;
 
-                    // —— 检测：真实引擎；失败/未接入 → 回落 Mock（演示不中断，落地指南 §2.2"引擎可插拔"） ——
+                    // —— 检测：真实引擎；失败 → 本轮跳过判定（不出假框、不落审计，见下方 else 分支注释） ——
                     // 取引擎引用 + 标记在途在同一把锁内完成：切换引擎时据此判断能否立刻 Dispose 旧实例。
                     var prompts = step.Expectation == StepExpectation.FinalCheck
                         ? new List<string>(_recipe.Parts)
@@ -432,13 +465,18 @@ namespace AIris.Core.Engine
                     }
                     else
                     {
-                        // 降级：HTTP 引擎不可达 → Mock 出框（仅在 Mock 引擎未激活时走这里）
-                        var fallback = _mockEngine ?? (_mockEngine = new MockDetectionEngine());
-                        var mr = fallback.DetectAsync(frame.Image, prompts, CancellationToken.None).GetAwaiter().GetResult();
-                        dets = mr.Detections;
-                        // 实际执行者是回落替身——信息行/审计都要写出来，不能伪装成选中的引擎
-                        _lastExecName = exec.Name + "→Mock";
-                        _lastExecMs = mr.ElapsedMs;
+                        // 引擎不可达：本轮跳过判定（不推进工步、不落审计、不出框）。
+                        //
+                        // 为什么不再回落 Mock 出框（2026-11-28 修正）：
+                        //   MockDetectionEngine 按 MockScene 的假布局出框，画在真实相机画面上位置全错；
+                        //   更严重的是它会继续参与 JudgeEngine 判定并写进审计——等于用假数据判定 OK/NG，
+                        //   违反「几何判定必须确定性、可审计」红线（AGENTS.md 铁律 12）。
+                        //   Mock 演示链路由 Mock 引擎自身承担（MockMode ON 时引擎就是 Mock，不走本分支）。
+                        _lastDetections = EmptyDetections;
+                        _lastExecName = exec.Name + "（不可达）";
+                        _lastExecMs = 0;
+                        _lastInfoLine = BuildInfoLine();
+                        continue;   // finally 里照常 Dispose 本帧
                     }
                     _lastDetections = dets;
 
@@ -446,6 +484,10 @@ namespace AIris.Core.Engine
                     var roi = FindRoi(step.RoiId);
                     var outcome = JudgeEngine.Judge(step, roi, dets, _recipe.Parts);
                     _lastOutcome = outcome;
+
+                    // 信息行缓存：相机线程在 OnFrame 里直通读它（检测线程写、volatile 保可见性），
+                    // 放在判定之后更新，保证下一帧画面带的是"本轮执行者 + 耗时"完整信息。
+                    _lastInfoLine = BuildInfoLine();
 
                     // —— 稳定帧累计与推进（最终结论落审计） ——
                     _steps.Feed(outcome);
@@ -461,9 +503,26 @@ namespace AIris.Core.Engine
             }
         }
 
-        private List<Detection> _lastDetections = new List<Detection>();
+        /// <summary>最近一轮检测结果（检测线程整体替换、相机线程读给 UI 直通）。
+        /// 每次都是新 List（旧 List 不再修改），volatile 保证跨线程可见性；
+        /// UI 侧按引用去重——引用没变就不投递 Dispatcher，不产生每帧排队。</summary>
+        private volatile List<Detection> _lastDetections = new List<Detection>();
+
+        /// <summary>最近一轮信息行缓存（检测线程更新、相机线程直通读；引用传递，同上）。</summary>
+        private volatile string _lastInfoLine = "";
+
+        // —— 实测分辨率/帧率（信息行显示真实值；相机线程写，检测线程读） ——
+        private volatile int _frameW;          // 最近帧宽（0=尚未出帧）
+        private volatile int _frameH;          // 最近帧高
+        private volatile int _fpsTimes10;      // 实测帧率 ×10（整数存，显示时 /10）
+        private long _fpsWindowStart = Stopwatch.GetTimestamp();   // 统计窗口起点（仅相机线程访问）
+        private int _fpsWindowCount;           // 窗口内帧数（仅相机线程访问）
+
         private JudgeOutcome _lastOutcome;
-        private MockDetectionEngine _mockEngine;    // 降级回落专用（懒建）
+
+        /// <summary>引擎不可达时的空检测集（静态复用：引用不变，UI 侧引用去重只清一次框）。</summary>
+        private static readonly List<Detection> EmptyDetections = new List<Detection>();
+
         private CameraFrame _liveFrame;             // 本轮参与判定的帧（Verdict 同步回调里截存档用）
 
         private ROIRect FindRoi(string roiId)
@@ -475,10 +534,13 @@ namespace AIris.Core.Engine
 
         private string BuildInfoLine()
         {
-            string baseLine = "2592 × 1944 · 8 fps";
+            // 实测分辨率 + 帧率（不再写死 "2592 × 1944 · 8 fps"：实际流可能完全不同，
+            // 错误数字会让现场对"卡不卡/延时大不大"判断失真）
+            string baseLine = (_frameW > 0 ? _frameW + " × " + _frameH : "—")
+                              + " · " + (_fpsTimes10 / 10.0).ToString("0.#") + " fps";
             if (_lastOutcome == null) return baseLine;
 
-            // 实际执行者优先（回落时显示 "Qwen3-VL-8B→Mock xx ms"），未检测过退回当前引擎
+            // 实际执行者优先（不可达时显示 "Qwen3-VL-8B（不可达）"），未检测过退回当前引擎
             var name = _lastExecName;
             var ms = _lastExecMs;
             if (string.IsNullOrEmpty(name))
@@ -564,7 +626,7 @@ namespace AIris.Core.Engine
                 NgReason = e.Pass ? "" : e.Detail,
                 RuleSnapshot = step == null ? "" : WorkstepEngine.RuleSnapshot(step),
                 ShotFile = shotFile,
-                // 实际执行者（未接入回落时记 "X→Mock"，追溯链能看出这单是不是演示替身出的框）
+                // 实际执行者（不可达/跳过判定时不会走到本审计落档，见 DetectLoop 的 else 分支）
                 EngineName = ExecEngineLabel(),
                 // 语义决策备注（V0.1.7 JEV 留口）：NG 时可选归纳原因——增强链路，失败静默不阻断
                 SemanticNote = e.Pass ? "" : TrySemanticNote(step, e),

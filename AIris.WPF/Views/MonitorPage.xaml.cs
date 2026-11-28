@@ -81,10 +81,19 @@ namespace AIris.WPF.Views
             if (_vm != null) _vm.OpenNgDetail();
         }
 
+        private bool _redrawPosted;
+
         private void Boxes_CollectionChanged(object sender, NotifyCollectionChangedEventArgs e)
         {
-            // 检测线程事件（已 Dispatcher 收口），直接重绘
-            RedrawBoxes();
+            // VM 更新框是 Clear + 逐项 Add（两次以上 CollectionChanged），
+            // 合并成一次重绘：同一消息循环内只建一遍 UI 元素（旧实现 Clear 与 Add 各重绘一遍）。
+            if (_redrawPosted) return;
+            _redrawPosted = true;
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _redrawPosted = false;
+                RedrawBoxes();
+            }), System.Windows.Threading.DispatcherPriority.Render);
         }
 
         private void Stage_SizeChanged(object sender, SizeChangedEventArgs e) { RedrawBoxes(); }

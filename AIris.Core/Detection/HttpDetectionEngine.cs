@@ -20,7 +20,7 @@ namespace AIris.Core.Detect
     /// 本类与上层零改动。
     ///
     /// 【Load 语义】同步探活（≤2s 上限）成功置 IsLoaded=true；失败不抛——UI 显示
-    /// "未接入，检测回落 Mock"（与旧桩口径一致，RunMonitor 降级路径不变）。
+    /// "未接入，检测暂停"（RunMonitor 见 IsLoaded=false 即跳过本轮判定，不出框不落审计）。
     /// 【语义红线】InferBox 无置信度——全链路判定只走 ROI-IoU 几何规则。
     /// </summary>
     public class HttpDetectionEngine : IDetectionEngine
@@ -35,6 +35,17 @@ namespace AIris.Core.Detect
         // 降级日志节流：检测线程每 300ms 一帧，服务持续不可达时同因 5s 内只记一条
         private string _lastDegradedReason;
         private DateTime _lastDegradedAt = DateTime.MinValue;
+
+        /// <summary>
+        /// 连续失败退避（2026-11-28）：服务不可达时每帧先编码 5MP JPEG（实测 100~300ms）
+        /// 再发请求，纯属浪费——失败后 30 秒内直接返回降级（不编码不发请求），到期重试一次。
+        /// 服务恢复后第一次成功即清零，回到正常检测节奏。检测线程单线程调用，无需锁。
+        /// </summary>
+        private int _consecutiveFailures;
+        private DateTime _lastFailureAt = DateTime.MinValue;
+
+        /// <summary>失败退避窗口（秒）：太短=继续浪费编码/连接，太长=服务恢复后检测延迟太久。</summary>
+        private const int FailureBackoffSeconds = 30;
 
         public HttpDetectionEngine(string id, string name, string license)
         {
@@ -79,9 +90,25 @@ namespace AIris.Core.Detect
                 if (_cfg == null || string.IsNullOrEmpty(_cfg.HttpBaseUrl))
                     return Degraded("未配置推理服务地址", sw);
 
+                // 失败退避（见字段注释）：服务不可达时不在每帧重复编码 5MP JPEG + 等超时。
+                // 注意 why 必须是固定字符串——带剩余秒数会让 Degraded 的同因去重失效、日志每秒刷屏。
+                if (_consecutiveFailures > 0 &&
+                    (DateTime.Now - _lastFailureAt).TotalSeconds < FailureBackoffSeconds)
+                {
+                    // quiet：真实失败那条日志已写过，退避窗口内每帧重复记会刷屏
+                    return Degraded("服务不可达（退避中，稍后自动重试）", sw, quiet: true);
+                }
+
                 var ep = BuildEndpoint(_cfg);
                 var r = await _client.DetectAsync(ep, EncodeJpg(frame), prompts, ct).ConfigureAwait(false);
-                if (!r.Ok) return Degraded(r.Error, sw);
+                if (!r.Ok)
+                {
+                    _consecutiveFailures++;
+                    _lastFailureAt = DateTime.Now;
+                    return Degraded(r.Error, sw);
+                }
+
+                _consecutiveFailures = 0;
 
                 sw.Stop();
                 Stats.TotalCalls++;
@@ -118,13 +145,14 @@ namespace AIris.Core.Detect
             };
         }
 
-        /// <summary>降级结果（UI 提示引擎未接入，检测链回落 Mock）。
-        /// 检测节拍 300ms，同一原因持续不可达时每帧记一条会刷爆运行日志——同因 5s 内只记一次。</summary>
-        private DetectResult Degraded(string why, System.Diagnostics.Stopwatch sw)
+        /// <summary>降级结果（UI 提示引擎未接入，本轮跳过判定）。
+        /// 检测节拍 300ms，同一原因持续不可达时每帧记一条会刷爆运行日志——同因 60s 内只记一次。
+        /// quiet=true 用于"退避窗口内的重复降级"：不写日志（真实失败那条已写过，信息行照常显示降级）。</summary>
+        private DetectResult Degraded(string why, System.Diagnostics.Stopwatch sw, bool quiet = false)
         {
             sw.Stop();
             var now = DateTime.Now;
-            if (why != _lastDegradedReason || (now - _lastDegradedAt).TotalSeconds >= 5)
+            if (!quiet && (why != _lastDegradedReason || (now - _lastDegradedAt).TotalSeconds >= 60))
             {
                 _lastDegradedReason = why;
                 _lastDegradedAt = now;

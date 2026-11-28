@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows;
 using System.Windows.Input;
@@ -9,6 +11,7 @@ using AIris.WPF.Services;
 using AIris.Core.Detect;
 using AIris.Core.Engine;
 using AIris.Core.Model;
+using Kaleidoscope.UI.Views;
 
 namespace AIris.WPF.ViewModels
 {
@@ -40,8 +43,34 @@ namespace AIris.WPF.ViewModels
 
         private bool _hooked;
 
+        /// <summary>页面是否处于前台（OnEnter/OnLeave 维护）。切到别的页时跳过画面推送：
+        /// 相机帧仍在采集/检测，但没人看的页面没必要每帧做 15MB 像素拷贝。</summary>
+        private volatile bool _pageActive;
+
+        /// <summary>
+        /// 帧呈现面（Kaleidoscope.UI 库件，V0.1.16 接入）：复用同一个 WriteableBitmap +
+        /// 丢帧背压 + 合并调度。旧链路每帧 Imaging.ToBitmapSource 会新建 ~20MB 大对象
+        /// （5MP 相机）+ GDI+ 24→32bpp 整帧转换 + 两次全量拷贝，GC 与 CPU 双重压力
+        /// 是"视频卡顿"的根因；本类把单帧成本压到一次内存拷贝（~2ms）。
+        /// 构造必须在 UI 线程（VM 由 MainViewModel 在 UI 线程创建）。
+        /// MaxPixelWidth=1600：5MP→1296×972 库内下采样，UI 不再每帧缩放 5MP
+        /// （软件渲染下实测显示渲染占单核约 80%，下采样后降到 ~20%）。
+        /// </summary>
+        private readonly KxFrameSurface _surface = new KxFrameSurface { MaxPixelWidth = 1600 };
+
+        /// <summary>上一帧检测结果引用（RunMonitor 仅在检测更新时换新 List；
+        /// 引用不变 = 框没变，跳过 Boxes 重建，静止画面零重绘开销）。</summary>
+        private List<Detection> _lastDetsRef;
+
+        /// <summary>上一帧已投递的信息行（值比较去重，避免每帧无谓 Dispatcher 收口）。</summary>
+        private string _lastInfo = "";
+
         public MonitorViewModel()
         {
+            // 帧呈现面：首帧/换分辨率时挂一次位图，之后每帧原地 WritePixels（零分配）。
+            // null = Clear() 回空态（当前监控台"空场也出帧"，只在真断流时才可能用到）。
+            _surface.SurfaceChanged += bmp => FrameImage = bmp;
+
             StartPauseCommand = new RelayCommand(StartPause);
             RecheckCommand = new RelayCommand(() => ServiceHub.Monitor.Recheck(), () => CanRecheck);
             DemoPlaceCommand = new RelayCommand(() => DemoPlace(SelectedPart));
@@ -92,7 +121,7 @@ namespace AIris.WPF.ViewModels
         public int NgCount { get { return _ngCount; } private set { SetProperty(ref _ngCount, value); } }
 
         private string _engineNote = "";
-        /// <summary>引擎提示行（"Mock 演示引擎"/"未接入，回落 Mock"）。</summary>
+        /// <summary>引擎提示行（"Mock 演示引擎"/"未接入，检测暂停"）。</summary>
         public string EngineNote { get { return _engineNote; } private set { SetProperty(ref _engineNote, value); } }
 
         // —— 当前工步引导卡 ——
@@ -190,6 +219,7 @@ namespace AIris.WPF.ViewModels
 
         public override void OnEnter()
         {
+            _pageActive = true;
             var m = ServiceHub.Monitor;
             if (!_hooked)
             {
@@ -205,7 +235,13 @@ namespace AIris.WPF.ViewModels
             RefreshEngineNote();
         }
 
-        /// <summary>引擎提示行：Mock 模式明示演示替身；真实模式按探活结果（未接入会标回落）。</summary>
+        /// <summary>离开监控台：停止画面推送（事件订阅保留，回页 OnEnter 即恢复）。</summary>
+        public override void OnLeave()
+        {
+            _pageActive = false;
+        }
+
+        /// <summary>引擎提示行：Mock 模式明示演示替身；真实模式按探活结果（未接入标检测暂停）。</summary>
         private void RefreshEngineNote()
         {
             if (ServiceHub.MockMode)
@@ -216,24 +252,83 @@ namespace AIris.WPF.ViewModels
             var eng = ServiceHub.Monitor == null ? null : ServiceHub.Monitor.Engine;
             EngineNote = eng == null ? ""
                 : eng.IsLoaded ? eng.Name
-                : eng.Name + " 未接入 · 回落 Mock 演示";
+                : eng.Name + " 未接入 · 检测暂停（不出框）";
         }
 
         private void OnFrame(object s, FrameEventArgs e)
         {
-            var img = Imaging.ToBitmapSource(e.Image);
-            var dets = e.Detections ?? new List<Detection>();
-            var info = e.InfoLine;
+            // 页面不在前台：帧没人看，跳过像素拷贝（检测/审计仍在 Core 层照常跑）
+            if (!_pageActive) return;
+
+            // 画面：按源像素格式直推呈现面（后台线程同步拷贝一次，返回即可 Dispose 源帧）。
+            // 注意：不能把 e.Image 的指针异步传下去——RunMonitor 在检测线程 finally 里 Dispose，
+            // PushFrame 契约是"返回时像素已拷走"，所以这里同步调用是安全的唯一姿势。
+            if (e.Image != null) PushBitmapFrame(e.Image);
+
+            var dets = e.Detections;
+            bool boxesChanged = !ReferenceEquals(dets, _lastDetsRef);
+            if (boxesChanged) _lastDetsRef = dets;
+
+            string info = e.InfoLine ?? "";
+            bool infoChanged = !string.Equals(info, _lastInfo, StringComparison.Ordinal);
+            if (infoChanged) _lastInfo = info;
+
+            // 画面已由 surface 直刷；框/信息行都没变就完全不进 Dispatcher（零排队）
+            if (!boxesChanged && !infoChanged) return;
+
             Application.Current.Dispatcher.BeginInvoke(new Action(() =>
             {
                 // 空场也出帧（2026-11-23 整改）：Mock 空场是透明帧，叠在舞台网格上就是
                 // "空台面"的真实观感；旧版空场清帧会回"等待画面…"，让用户误以为相机断流
                 // （实际相机在线、检测也在跑）。IdleText 只留给真正无帧的状态。
-                FrameImage = img ?? FrameImage;
                 CameraInfo = info;
+                if (!boxesChanged) return;
                 Boxes.Clear();
-                foreach (var d in dets) Boxes.Add(d);
+                if (dets != null) foreach (var d in dets) Boxes.Add(d);
             }));
+        }
+
+        /// <summary>
+        /// GDI Bitmap → KxFrameSurface（检测/相机线程调用）。
+        /// 【性能红线】LockBits 必须按<b>源格式</b>请求：旧路径固定请求 Format32bppArgb
+        /// 读 24bpp 相机裸流，GDI+ 会做整帧格式转换（5MP 实测 20~40ms/帧），是卡顿主因之一。
+        /// 源格式不在三档白名单时（8bpp/索引色等罕见源）才回落 24bpp 转换，保证画面不黑。
+        /// </summary>
+        private void PushBitmapFrame(Bitmap bmp)
+        {
+            BitmapData bd = null;
+            try
+            {
+                KxFramePixelFormat? fmt = MapPixelFormat(bmp.PixelFormat);
+                PixelFormat lockFormat = fmt.HasValue ? bmp.PixelFormat : PixelFormat.Format24bppRgb;
+
+                bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+                                  ImageLockMode.ReadOnly, lockFormat);
+                if (!fmt.HasValue) fmt = KxFramePixelFormat.Bgr24;
+
+                _surface.PushFrame(bd.Scan0, bmp.Width, bmp.Height, bd.Stride, fmt.Value);
+            }
+            catch (Exception ex)
+            {
+                // 丢一帧不影响检测主链路；日志节流（仅异常时写，正常帧零日志开销）
+                AppLog.Warn("画面帧转换失败（已丢帧）：" + ex.Message);
+            }
+            finally
+            {
+                if (bd != null) bmp.UnlockBits(bd);
+            }
+        }
+
+        /// <summary>GDI 像素格式 → 呈现面格式（对应关系与 alpha 语义见 KxFramePixelFormat 注释）。</summary>
+        private static KxFramePixelFormat? MapPixelFormat(PixelFormat pf)
+        {
+            switch (pf)
+            {
+                case PixelFormat.Format24bppRgb: return KxFramePixelFormat.Bgr24;
+                case PixelFormat.Format32bppArgb: return KxFramePixelFormat.Bgra32;
+                case PixelFormat.Format32bppPArgb: return KxFramePixelFormat.Pbgra32;
+                default: return null;
+            }
         }
 
         private void OnStepChanged(object s, StepEventArgs e)

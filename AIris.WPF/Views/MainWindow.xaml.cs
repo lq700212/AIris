@@ -13,6 +13,16 @@ namespace AIris.WPF.Views
     {
         private readonly MainViewModel _vm;
 
+        /// <summary>
+        /// 分层透明窗开关（基类构造期读取）：与进程渲染策略联动。
+        /// 硬件渲染（本地 GPU）→ 关分层：AllowsTransparency=True 会强制整窗软件渲染，
+        /// 5MP 相机画面 8fps 的缩放/合成会全压 CPU（实测单核 50%+、画面卡顿）；
+        /// 关掉后视频走 GPU，圆角由基类 SetWindowRgn 物理裁剪（主窗默认最大化无圆角，
+        /// 视觉零差异），文字还顺带恢复 ClearType。
+        /// 软件渲染（远程串流/INI 强制）→ 保持分层：反正都是 CPU，保留真圆角与柔影。
+        /// </summary>
+        protected override bool UseLayeredWindow => !Kaleidoscope.UI.Rendering.KxRenderPolicy.IsSoftwareRendering;
+
         public MainWindow(MainViewModel vm)
         {
             _vm = vm;

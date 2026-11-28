@@ -1,9 +1,12 @@
 using System;
 using System.Collections.ObjectModel;
+using System.Drawing;
+using System.Drawing.Imaging;
 using System.Linq;
 using System.Windows.Input;
 using AIris.WPF.Services;
 using AIris.Core.Model;
+using Kaleidoscope.UI.Views;
 
 namespace AIris.WPF.ViewModels
 {
@@ -82,8 +85,22 @@ namespace AIris.WPF.ViewModels
 
         private Recipe _recipe;
 
+        /// <summary>
+        /// 预览帧呈现面（V0.1.16 接入，口径同 MonitorViewModel）：复用 WriteableBitmap +
+        /// 丢帧背压。编辑页预览与监控台共用 RunMonitor.FrameReady，两页各自一个 surface；
+        /// 不在预览态时 OnPreviewFrame 直接返回，绝不做无谓的整帧转换。
+        /// MaxPixelWidth=1600：ROI 标画只需要看位置，5MP 下采样到 1296×972 足够。
+        /// </summary>
+        private readonly KxFrameSurface _surface = new KxFrameSurface { MaxPixelWidth = 1600 };
+
         public RecipeEditorViewModel()
         {
+            // 首帧/换分辨率时挂一次位图，之后原地 WritePixels（零分配）
+            _surface.SurfaceChanged += bmp =>
+            {
+                if (_previewOn) FrameImage = bmp;
+            };
+
             AddStepCommand = new RelayCommand(AddStep);
             DeleteStepCommand = new RelayCommand(DeleteStep, () => SelectedStep != null);
             AddRoiCommand = new RelayCommand(AddRoi);
@@ -258,6 +275,8 @@ namespace AIris.WPF.ViewModels
                             _frameHooked = true;
                             ServiceHub.Monitor.FrameReady += OnPreviewFrame;
                         }
+                        // 复用上一轮已建好的同分辨率位图（surface 保留，首帧事件只负责重建场景）
+                        FrameImage = _surface.Bitmap;
                         ServiceHub.Monitor.StartPreview();
                     }
                     else
@@ -282,17 +301,48 @@ namespace AIris.WPF.ViewModels
             private set { SetProperty(ref _frameImage, value); }
         }
 
-        /// <summary>预览帧到达（相机线程 → Dispatcher 收口转 BitmapSource；口径同 MonitorViewModel.OnFrame）。
+        /// <summary>预览帧到达（相机线程直推呈现面，口径同 MonitorViewModel.OnFrame）。
         /// 2026-11-23 整改：空场不再清帧——Mock 的"空场"是透明帧（台面网格/扫描在舞台层），
         /// 叠出来就是"空台面"；旧版清帧回"等待画面…"会让人误判相机断流。
-        /// IdleText 只保留给真正无帧（相机未启动/断流）的状态。</summary>
+        /// IdleText 只保留给真正无帧（相机未启动/断流）的状态。
+        /// 【性能红线】非预览态立即返回：旧实现订阅不退订且无条件转 BitmapSource，
+        /// 监控台运行期间编辑页在后台每帧白转一张 5MP 大图（20MB 分配/帧），纯浪费。</summary>
         private void OnPreviewFrame(object s, AIris.Core.Engine.FrameEventArgs e)
         {
-            var img = Imaging.ToBitmapSource(e.Image);
-            System.Windows.Application.Current.Dispatcher.BeginInvoke(new Action(() =>
+            if (!_previewOn || e.Image == null) return;
+
+            Bitmap bmp = e.Image;
+            BitmapData bd = null;
+            try
             {
-                FrameImage = img ?? FrameImage;
-            }));
+                // 按源格式直读（24bpp 相机裸流零格式转换），像素拷入呈现面后即可释放源帧
+                KxFramePixelFormat? fmt = MapPixelFormat(bmp.PixelFormat);
+                PixelFormat lockFormat = fmt.HasValue ? bmp.PixelFormat : PixelFormat.Format24bppRgb;
+                bd = bmp.LockBits(new Rectangle(0, 0, bmp.Width, bmp.Height),
+                                  ImageLockMode.ReadOnly, lockFormat);
+                if (!fmt.HasValue) fmt = KxFramePixelFormat.Bgr24;
+                _surface.PushFrame(bd.Scan0, bmp.Width, bmp.Height, bd.Stride, fmt.Value);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Warn("预览帧转换失败（已丢帧）：" + ex.Message);
+            }
+            finally
+            {
+                if (bd != null) bmp.UnlockBits(bd);
+            }
+        }
+
+        /// <summary>GDI 像素格式 → 呈现面格式（与 MonitorViewModel.MapPixelFormat 同源口径）。</summary>
+        private static KxFramePixelFormat? MapPixelFormat(PixelFormat pf)
+        {
+            switch (pf)
+            {
+                case PixelFormat.Format24bppRgb: return KxFramePixelFormat.Bgr24;
+                case PixelFormat.Format32bppArgb: return KxFramePixelFormat.Bgra32;
+                case PixelFormat.Format32bppPArgb: return KxFramePixelFormat.Pbgra32;
+                default: return null;
+            }
         }
 
         public override void OnEnter()

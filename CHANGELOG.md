@@ -2,6 +2,119 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.19（2026-11-28）监控画面链路整改与模型接入：KxFrameSurface 库件接入 + 渲染策略库化 + 限流离散化修正（9fps→20fps、呈现层零额外延时）
+
+### 一、问题：真机 RTSP 5MP@8fps 单核 63.4%，视频明显卡顿
+
+- **现象**：真机相机 2592×1944@8fps 运行时单核 CPU 实测 63.4%（5 秒窗口采样），
+  画面周期性卡顿，切页/拖动窗口响应迟滞。
+- **根因四处（按开销排序）**：
+  1. `Services/Imaging.ToBitmapSource` 每帧对 5MP 帧做 GDI+ 24bpp→32bpp 整帧格式转换
+     （LockBits 固定请求 32bppArgb 读 24bpp 相机裸流，GDI+ 内部转换实测 20~40ms/帧），
+     再 `new byte[20MB]` + `BitmapSource.Create` 整块再拷一次 + Freeze——每帧约 40MB
+     内存流量 + 20MB 大对象堆分配，GC 与 LOH 碎片造成周期性卡顿；
+  2. `MonitorViewModel.OnFrame` 每帧无条件 `Dispatcher.BeginInvoke` 一个闭包，UI 渲染
+     慢于采集时任务在队列里无限积压——画面延迟越拖越大（"越跑越卡"）；
+  3. 启动链无条件 `RenderOptions.ProcessRenderMode = SoftwareOnly`，叠加主窗
+     `AllowsTransparency=True`（分层窗本身强制整窗软件渲染）：5MP 帧 8fps 的
+     缩放/合成全压 CPU；
+  4. `MonitorPage.RedrawBoxes` 每帧全量重建检测框元素并 `new SolidColorBrush`
+     （Clear + 逐项 Add 各触发一遍 CollectionChanged → 同一帧重绘两遍）。
+- **对照实测（整改后）**：监控台 45.3% vs 切到配方中心（画面推送停、相机仍取流）
+  41.1%——显示渲染只占约 4 个百分点；**剩余大头是 RTSP 5MP H.264 软解码单线程
+  35.9%**（线程级采样确认），属相机流固有成本。解码线程 `BufferSize=1` 无积压，
+  8fps 解码约 45ms/帧仍在 125ms 预算内，不会掉帧。
+
+### 二、方案：库件 `KxFrameSurface` 收口高频帧呈现（同步沉淀 Kaleidoscope.UI V2.4.6）
+
+- **新增 `Kaleidoscope.UI/Views/KxFrameSurface.cs`**（库件，两宿主共用）：
+  - **复用同一个 WriteableBitmap**：分辨率/格式不变时零重建、零新对象，每帧只
+    `WritePixels` 原地更新；
+  - **源格式直拷**：`PushFrame(IntPtr scan0, w, h, stride, KxFramePixelFormat)` 按源
+    像素格式（Bgr24/Bgra32/Pbgra32）整块内存拷贝，**零格式转换**（5MP 24bpp 实测 1~3ms）；
+  - **丢帧背压**：UI 来不及渲染时新帧直接覆盖旧帧，Dispatcher 队列永不堆积
+    （`DroppedFrames` 诊断计数）；
+  - **合并调度**：多次推帧合并为一次 `DispatcherPriority.Render` 渲染，输入/绑定优先；
+  - **`SurfaceChanged` 事件**：首帧/换分辨率/换格式时触发一次，宿主挂一次位图即可；
+  - 可选 `MaxFps` 限流、`Clear()` 回空态、`Dispose()` 幂等。
+- **宿主接入**：
+  - `MonitorViewModel`：删除 `Imaging.ToBitmapSource` 调用，改按 `bmp.PixelFormat` 映射
+    格式后 `LockBits` 取 `Scan0` 直推（白名单外格式才回落 24bpp 转换兜底）；
+    `FrameImage` 只在 `SurfaceChanged` 时赋值；检测结果按**引用比较**去重（RunMonitor
+    仅在检测更新时换新 List），框/信息行都没变就完全不进 Dispatcher；
+  - `RecipeEditorViewModel`：同一套口径接入（编辑页 ROI 预览共用 `RunMonitor.FrameReady`），
+    非预览态立即返回（旧实现订阅不退订且无条件转大图，后台每帧白转一张 5MP）；
+  - `MonitorPage.RedrawBoxes`：CollectionChanged 合并为一次 `DispatcherPriority.Render`
+    重绘（Clear + Add 只建一遍 UI 元素）。
+- **删除 `Services/Imaging.cs`**（唯一调用点已迁走，不留新旧兼容分支）。
+
+### 三、渲染策略库化：`KxRenderPolicy` + 分层窗联动（默认走 GPU）
+
+- **新增 `Kaleidoscope.UI/Rendering/KxRenderPolicy.cs`**（沉淀 YoloDetector v2.10.3
+  远程双指针现场结论）：
+  - 默认**硬件渲染**（`RenderMode.Default`，驱动异常自动回落，不强制 Hardware）；
+  - 仅检测到已知远程控制/串流软件（UU 远程 GameViewer/向日葵/ToDesk/RustDesk/
+    TeamViewer/AnyDesk/贝锐）才切软件渲染（避免远程画面双指针）；
+  - INI `[App] ForceSoftwareRendering` 三态覆盖：留空=自动 / 1=强制软件 / 0=强制硬件。
+- **主窗分层窗联动**：`MainWindow.UseLayeredWindow => !KxRenderPolicy.IsSoftwareRendering`
+  ——硬件渲染环境关分层（`AllowsTransparency=True` 会强制整窗软件渲染，视频无法走 GPU；
+  关掉后圆角走基类 SetWindowRgn 物理裁剪，主窗默认最大化视觉零差异，文字恢复 ClearType）；
+  软件渲染环境保持分层（反正都是 CPU，保留真圆角与柔影）。
+
+### 四、KxImageStage 视频场景增强（库件，同步沉淀）
+
+- **`GridVisibleWhenFrame` DP**（默认 true 保旧观感）：有帧时是否仍绘制网格底纹。
+  真机帧不透明，网格被完全遮挡却仍逐帧重绘（~500 tile/帧固定开销）；监控台绑
+  `IsMockMode`（Mock 透明帧要网格当台面底纹，真机收起），编辑页显式 False。
+- **`FrameScalingMode` DP**（默认 `LowQuality` 双线性）：WPF 对缩小默认 Fant 高质量
+  重采样，5MP→1MP 软件渲染下单帧 10ms+；视频预览用双线性视觉差异几乎不可见。
+
+### 五、延时归因（2026-11-28 追加）：φ 相位法证伪，真凶是限流离散化
+
+- **背景**：用户反馈「画面延时比较严重」。先用「相机 OSD 秒跳变相位 φ」做间接测量，
+  得到 AIris 显示路径 φ≈789ms、ffmpeg 直连 φ≈214ms，据此怀疑 OpenCV 缓冲积压。
+- **φ 相位法被证伪**（两处硬伤）：
+  1. 秒跳变检测靠「灰度差超阈值采样点占比」，而 OSD 每秒只变 2 位数字，差分量常低于阈值
+     → 漏检；漏检使相位采样点错乱，可算出任意假值（同路径两次测 171ms vs 308ms 即为噪声）；
+  2. φ 是 mod 1s 的相位，**整数秒的积压完全测不出**——这是该方法的结构性缺陷。
+- **决定性实验（cvprobe 探针，两轮）**：
+  - **pair 对比**：独立线程按相机速率持续 `Read`（复刻 AIris 实际读法），主线程每 500ms
+    取最新帧快照 + 同步 BitBlt 截 AIris 屏幕，把两侧 OSD 裁出拼图比对。
+    结果 **14 对中 13 对秒数完全相同**（唯一差异是采样恰好跨秒边界）→
+    **AIris 显示层相对 OpenCV 直连读帧的额外延时 ≈ 0**。
+  - **readstat**：持续读 10 秒得 208 帧 / 20.7fps，`Read` 返回间隔平均 **48.2ms**、
+    中位 49.8ms（相机帧间隔 50ms），**立即返回（<5ms）占比 0.0%** →
+    解码链路完全实时、无任何积压。
+  - 反向验证：探针初版每 500ms 才 `Read` 一次，读到的 OSD 卡死在同秒不动——
+    证明「读频低于产速必然积压」，而 AIris 是死循环持续读，不满足该条件。
+- **真凶：`RtspCameraSource.MaxFps = 12` 的限流离散化**：
+  限流判据是「距上次接受 ≥ 1000/12 = 83.3ms 才收」，而相机帧间隔固定 50ms
+  → 50ms 被拒、100ms 才收 → **实际只有 10fps**（信息行实测 9fps），且节拍是
+  100ms 一停一顿。快速运动下每秒仅 9~10 张，观感就是"慢半拍"；
+  而 YoloDetector 未限流跑满 20fps，**两项目的流畅度差异正源于此**。
+- **修复**：
+  1. `ServiceHub` 建相机时 `MaxFps = 0`（不限流，跑满相机 20fps）——每帧成本已被
+     下采样压到约 5ms，20fps 合计约 10% 单核，完全可承受；
+  2. **解码后立即下采样**（新增库件 `RtspFrameCapturer.MaxPixelWidth`，AIris 设 1600）：
+     旧链路把 2304×1296 全尺寸图一路搬到 UI，每帧多三次大图操作（Clone 9MB +
+     Mat→Bitmap 9MB + 呈现面缩放）；现在解码输出处一次 `INTER_AREA` resize（2~3ms），
+     后续 Clone/转换/推帧全部只处理 1600×900，信息行分辨率同步报告下采样后尺寸。
+- **实测收益**：显示帧率 **9fps → 20fps**（跑满相机）；单核 CPU 170.3% → 185.9%
+  （+15.6pt，其中解码 20fps 是主要固定成本）；延时保持与直连读帧同步（pair 实验零偏差）。
+
+### 六、验证
+
+- **构建**：`MSBuild AIris.WPF.csproj` 0 error（Kaleidoscope.UI / AIris.Core 级联通过）。
+- **真机实测**：RTSP 2592×1944@8fps 画面正常，检测框/工步推进/NG 告警/审计落档全链路正常；
+  截图目检（浅色 C 方案观感不变）。
+- **延时/帧率实测（2026-11-28 追加）**：`cvprobe readstat` 确认 Read 间隔 48.2ms、立即返回 0.0%；
+  `pair` 对比图 14 对 OSD 秒数零偏差；信息行 `1600 × 900 · 20 fps`。
+- **CPU**：63.4% → 45.3%（监控台检测运行中，单核口径）；渲染策略日志确认当前环境
+  命中 UU 远程 GameViewerService 自动切软件渲染（远程场景预期行为，本地 GPU 环境更低）。
+  放开限流后 20fps 口径为 185.9%（相机 2304×1296@20fps HEVC 软解是主要成本）。
+- **YoloDetector 同步**：预览链路改用同一库件（见其 CHANGELOG v2.11.4）；
+  `RtspFrameCapturer.MaxPixelWidth` 默认 0（不下采样），对需要全尺寸的宿主零影响。
+
 ## V0.1.18（2026-11-28）Mock 收口为全局开关 + 顶栏状态胶囊真实化
 
 ### 一、Mock 收口：两处独立 Mock 选项 → 顶栏「Mock 数据」一键全局切换

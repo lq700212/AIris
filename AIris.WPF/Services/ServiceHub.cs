@@ -117,7 +117,7 @@ namespace AIris.WPF.Services
         /// 持久化 → 相机/引擎热切换（运行中不中断检测线程）→ 通知各页刷新。
         ///
         /// 关闭时按 INI 里保存的真实相机与真实引擎卡恢复；真实设备不可达时由运行层按既有
-        /// 语义如实呈现（相机离线红点 / 引擎探活失败回落 Mock 橙点），这里不伪造在线。
+        /// 语义如实呈现（相机离线红点 / 引擎探活失败"检测暂停"橙点），这里不伪造在线。
         /// </summary>
         public static void SetMockMode(bool on)
         {
@@ -169,7 +169,24 @@ namespace AIris.WPF.Services
                 case "hik":
                     return new HikCameraSourceStub();
                 default:
-                    return new RtspCameraSource(dev);
+                    var rtsp = new RtspCameraSource(dev);
+                    // 【帧率不限流（2026-11-28 实测修正）】
+                    // 旧值 12 是"按相机 20fps 产、限到 12fps 省 CPU"的估算，实测有严重副作用：
+                    // 限流用"距上次接受 ≥ 1000/12 = 83.3ms 才收"的阈值判定，而相机帧间隔固定
+                    // 50ms → 50ms 被拒、100ms 才收 → 实际只有 10fps，且节拍是 100ms 一停一顿。
+                    // 目检与实测（cvprobe readstat：Read 间隔 48.2ms、立即返回占比 0.0%）确认
+                    // 解码链路本身是实时的，卡顿感全部来自这层限流——画面每秒只有 9~10 张，
+                    // 快速运动看起来就是"慢半拍"。YoloDetector 未限流跑满 20fps，两项目观感差异即源于此。
+                    // 现在每帧成本已被"解码后下采样到 1600 宽"压到约 5ms（20fps 合计约 10% 单核），
+                    // 放开限流让画面与相机同帧率，是延时/流畅度最直接的一刀。
+                    rtsp.MaxFps = 0;
+                    // 解码后立即下采样到 1600 宽（2026-11-28 延时优化）：
+                    // 旧链路把 2304×1296 全尺寸图一路搬到 UI，每帧多三次大图操作，
+                    // 消费速率被压到 10fps 而相机产 20fps → RTSP 缓冲永久积压 →
+                    // 画面延时固定 789ms（实测）。下采样后整条链路只处理 1600×900，
+                    // 消费速率回到相机生产速率之上，积压消失（延时回落到管道固有值）。
+                    rtsp.MaxPixelWidth = 1600;
+                    return rtsp;
             }
         }
 
@@ -282,7 +299,7 @@ namespace AIris.WPF.Services
                 return Confirm("切换检测引擎",
                     "切换到 " + card.Name + " 将卸载当前引擎并重新加载。\r\n许可证：" + card.LicenseNote
                     + "\r\n服务参数：" + card.Protocol + " · " + card.HttpBaseUrl + " · " + card.HttpModel
-                    + "\r\n未接入时检测自动回落 Mock 演示（流程不中断，画面信息行会标注 →Mock）。"
+                    + "\r\n未接入时检测本轮暂停（不出框、不落审计，信息行会标注「不可达」）。"
                     + mockNote,
                     "确认切换", false);
             }

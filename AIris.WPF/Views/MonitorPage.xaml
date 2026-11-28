@@ -49,8 +49,9 @@
                     <!-- 库 KxImageStage：舞台底/网格/扫描/帧图/空态/叠加画布全内置，
                          宿主只绑 FrameSource + IdleText，叠加框在 Stage.Overlay 上画 -->
                     <ui:KxImageStage x:Name="StageGrid" SizeChanged="Stage_SizeChanged"
-                                     GridStep="64" ui:KxRoundedClip.Radius="12"
-                                     FrameSource="{Binding FrameImage}" IdleText="等待画面…"/>
+                                     GridStep="64"
+                                     FrameSource="{Binding FrameImage}" IdleText="等待画面…"
+                                     GridVisibleWhenFrame="{Binding IsMockMode}"/>
 
                     <!-- 舞台脚注（设计稿 .stage-foot：28px 半透明条贴舞台底边） -->
                     <Border VerticalAlignment="Bottom" Height="28" CornerRadius="0,0,12,12"

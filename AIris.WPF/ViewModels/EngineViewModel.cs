@@ -74,7 +74,7 @@ namespace AIris.WPF.ViewModels
 
     /// <summary>
     /// 检测引擎 VM（设计稿 data-page="engine"）：引擎卡切换（二次确认）+ 添加/删除自定义引擎 + 推理参数 + 服务状态。
-    /// 大模型未接入：HTTP 引擎 Load 后 IsLoaded=false，检测走 RunMonitor 降级回落 Mock（UI 明示）。
+    /// 大模型未接入：HTTP 引擎 Load 后 IsLoaded=false，检测本轮跳过（不出框、不落审计），UI 明示"检测暂停"。
     /// 每张卡独立保存连接参数（Data\EngineCards.json），切换即回填表单——换模型不重复手填。
     /// </summary>
     public class EngineViewModel : PageViewModelBase
@@ -177,7 +177,7 @@ namespace AIris.WPF.ViewModels
         public long TotalCalls { get { return _totalCalls; } private set { SetProperty(ref _totalCalls, value); } }
 
         private string _engineState = "—";
-        /// <summary>引擎态一句话（"Mock 演示 · 已就绪"/"HTTP 桩 · 未接入，检测回落 Mock"）。</summary>
+        /// <summary>引擎态一句话（"Mock 演示 · 已就绪"/"HTTP 桩 · 未接入，检测暂停"）。</summary>
         public string EngineState { get { return _engineState; } private set { SetProperty(ref _engineState, value); } }
 
         private string _testState = "idle";
@@ -252,9 +252,8 @@ namespace AIris.WPF.ViewModels
                 ActiveEngineName = monitor.Engine.Name;
                 EngineState = monitor.Engine.IsLoaded
                     ? monitor.Engine.Name + " · 已就绪"
-                    : monitor.Engine.Name + " · 未接入，检测回落 Mock 演示";
-                // 单帧耗时取"实际执行者"（未接入时是 Mock 替身的耗时）——否则回落态永远显示 0 ms，
-                // 与画面明明在出框的事实矛盾
+                    : monitor.Engine.Name + " · 未接入，检测暂停（不出框）";
+                // 单帧耗时取"实际执行者"（未接入时恒为 0 = 本轮跳过），避免把"配置的引擎"当"实际跑的"
                 LastMs = string.IsNullOrEmpty(monitor.LastExecEngineName)
                     ? monitor.Engine.Stats.LastElapsedMs
                     : monitor.LastExecElapsedMs;
@@ -332,7 +331,7 @@ namespace AIris.WPF.ViewModels
             ServiceHub.Host.Info("引擎卡已添加。填好连接参数后点卡片上的「切换到此引擎」即可使用。", "已添加");
         }
 
-        /// <summary>删除自定义引擎卡（内置卡无删除入口；删的是当前激活卡时回落 Mock）。</summary>
+        /// <summary>删除自定义引擎卡（内置卡无删除入口；删的是当前激活卡时切回 Mock 演示引擎）。</summary>
         public void DeleteEngine(EngineCardVm vm)
         {
             if (vm == null || vm.Card.IsBuiltin) return;
@@ -451,7 +450,7 @@ namespace AIris.WPF.ViewModels
                 engine.Load(cfg);
                 RefreshState();
                 ServiceHub.Host.Info("推理参数已应用：协议 " + Protocol + " · "
-                    + (engine.IsLoaded ? "服务在线（探活通过）" : "服务未连通（检测回落 Mock 演示）"), "已应用");
+                    + (engine.IsLoaded ? "服务在线（探活通过）" : "服务未连通（检测暂停，不出框）"), "已应用");
             }
             else
             {

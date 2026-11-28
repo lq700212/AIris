@@ -134,7 +134,7 @@
                                     <TextBlock Text="开放词汇即指即检 · 归一化坐标框输出 · 判定走 ROI-IoU 几何规则"
                                                FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
                                                Margin="0,10,0,0" TextWrapping="Wrap" LineHeight="18"/>
-                                    <TextBlock Text="切换需重载引擎（未接入时回落 Mock 演示）"
+                                    <TextBlock Text="切换需重载引擎（未接入时检测暂停，不出框）"
                                                FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
                                                Margin="0,2,0,0" TextWrapping="Wrap" LineHeight="18"/>
                                     <!-- 服务参数小字（协议 · 模型名）：切卡前一眼看清连的是哪套服务 -->

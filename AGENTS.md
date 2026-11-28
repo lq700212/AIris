@@ -150,6 +150,7 @@
 | --- | --- |
 | 新弹窗创建（ChromeDialogWindow 骨架/标题条/隐式样式） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md` + `Views\LicenseDialog.xaml`（最简样板） |
 | **新建控件/样式前查库内现成件**（场景→控件对照表 + 自绘三条件 + 检索命令） | `ThirdParty\Kaleidoscope\Kaleidoscope.UI\README.md`「**控件复用索引（按场景查）**」节——开工先查，禁止重复造轮子 |
+| **相机/视频帧呈现（高频推帧、丢帧背压、零格式转换）/ 渲染模式（GPU·CPU·远程串流双指针）** | 库件 `Kaleidoscope.UI\Views\KxFrameSurface.cs` 类头（线程契约 + alpha 语义红线）+ `Rendering\KxRenderPolicy.cs` 类头（三态覆盖 + 分层窗联动）；宿主接入样板：`ViewModels\MonitorViewModel.cs`（`PushBitmapFrame`）与 `App.xaml.cs` 渲染策略段 |
 | **ROI 标画交互 / 画布比例口径 / 全屏标画弹窗**（序号 10.1 自绘钮登记见下） | `Views\RoiStageController.cs`（三态拖拽 + 按帧比例内接舞台 + 订阅联动）+ `Views\RoiFullscreenDialog.xaml`（最大化弹窗 + 同源 VM） |
 | 自绘控件登记（待评审是否沉库 Kaleidoscope.UI） | `RecipeEditorPage.xaml` 资源 `RoiExpandButton`：纯图标方形"全屏标画"钮（四角扩展箭头 Path，30×30，圆角 9，hover 转 ThemePrimary）——库内 Kx*/Fresh* 按钮族六档均为「文字」或「图标+文字」胶囊，无纯图标方形按钮，故自绘；已满足 Theme* 键 + FocusVisualStyle=Null |
 | 主题键新增（两套字典同键换值 + 契约键段字面值红线） | `Styles/ThemeLight.xaml` + `ThemeDark.xaml` 尾部注释 |

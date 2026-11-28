@@ -12,7 +12,7 @@ namespace AIris.WPF
     /// <summary>
     /// 应用启动链（对位 HJVision-WPF App.OnStartup 模式，按 AIris 实际裁剪）：
     /// 1) KxShellDefaults 宿主级壳常量 —— 必须任何窗创建之前设（库静态配置类，设后只读）
-    /// 2) 全局文本清晰化 + 软件渲染（虚拟屏/老驱动防白磁贴，必须建窗前设）
+    /// 2) 全局文本清晰化 + 渲染策略（V0.1.16：默认硬件渲染，远程串流才切软件）
     /// 3) Mock/日志注入（Kaleidoscope MockBridge + LogHelper + DeviceServiceBase.LogSink）
     /// 4) ServiceHub 装配（存储/设置/RunMonitor）+ 主题恢复 + 启用配方装载
     /// 5) 建主窗显示 → 启动监控（Mock 演示态默认启动，画面即活）
@@ -39,16 +39,34 @@ namespace AIris.WPF
             Kaleidoscope.UI.Views.KxShellDefaults.SysButtonWidth = 40;
             Kaleidoscope.UI.Views.KxShellDefaults.CloseFontWeight = FontWeights.Bold;
 
-            // —— 2. 全局文本清晰化 + 软件渲染（工控虚拟屏/老驱动防白磁贴） ——
+            // —— 2. 全局文本清晰化 + 渲染策略（必须建窗前设） ——
             EventManager.RegisterClassHandler(typeof(Window), Window.LoadedEvent,
                 new RoutedEventHandler((s, arg) => TextOptions.SetTextRenderingMode((DependencyObject)s, TextRenderingMode.ClearType)));
-            RenderOptions.ProcessRenderMode = RenderMode.SoftwareOnly;
             DispatcherUnhandledException += OnDispatcherException;
 
             // —— 3. Kaleidoscope 注入 + 运行目录 —— 
             MockBridgeInjector.Install();
             LogSinkInjector.Install();
             Core.Config.AppPaths.EnsureDirs();
+
+            // —— 3.1 渲染策略（V0.1.16 视频卡顿整改）——
+            // 旧版无条件 RenderMode.SoftwareOnly：相机 5MP 画面 8fps 的缩放/合成全压 CPU，
+            // 叠加主窗分层透明（又是整窗软件渲染）→ 单核实测 63%，画面明显卡顿。
+            // 现按 Kaleidoscope.UI 库 KxRenderPolicy 决策（YoloDetector v2.10.3 远程双指针
+            // 方案的库化沉淀）：默认走 GPU 硬件渲染；仅检测到 UU远程/向日葵/ToDesk 等
+            // 远程控制软件时才切软件渲染（避免远程画面双指针）。
+            // INI [App] ForceSoftwareRendering：留空=自动；1/true=强制软件；0/false=强制硬件。
+            var renderIni = new Core.Config.IniFile(Core.Config.AppPaths.MainIni);
+            string forceRaw = renderIni.Read("App", "ForceSoftwareRendering", "");
+            bool? forceSoftware = string.IsNullOrWhiteSpace(forceRaw)
+                ? (bool?)null
+                : (forceRaw.Trim() == "1" || forceRaw.Trim().Equals("true", StringComparison.OrdinalIgnoreCase));
+            bool softwareRender = Kaleidoscope.UI.Rendering.KxRenderPolicy.Apply(forceSoftware);
+            AppLog.Info("渲染模式：" + (softwareRender ? "软件渲染（CPU）" : "硬件渲染（GPU）")
+                + (forceSoftware.HasValue ? " · INI 强制" : " · 自动检测")
+                + (Kaleidoscope.UI.Rendering.KxRenderPolicy.MatchedRemoteProcess != null
+                    ? " · 命中远程软件 " + Kaleidoscope.UI.Rendering.KxRenderPolicy.MatchedRemoteProcess
+                    : ""));
 
             // —— 4. 装配 + 主题恢复 ——
             ThemeService.AttachStore(new Core.Config.IniFile(Core.Config.AppPaths.MainIni));
