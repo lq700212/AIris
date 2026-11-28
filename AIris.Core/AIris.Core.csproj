@@ -13,6 +13,12 @@
     <Reference Include="System.Net.Http" />
     <!-- System.Drawing：相机帧/截图存档（Kaleidoscope 主库同款依赖） -->
     <Reference Include="System.Drawing" />
+    <!-- OpenCvSharp：RtspCameraSource 的 Mat 类型（Kaleidoscope.Detection 内部为 HintPath
+         引用，不随 ProjectReference 传递编译引用，此处按同一份 vendor DLL 补引） -->
+    <Reference Include="OpenCvSharp">
+      <HintPath>..\ThirdParty\Kaleidoscope\Vision\Detection\libs\OpenCvSharp.dll</HintPath>
+      <Private>true</Private>
+    </Reference>
   </ItemGroup>
 
   <ItemGroup>
@@ -24,6 +30,12 @@
     <!-- Kaleidoscope 主库：相机中性帧/SQLite 底座/MockBridge/LogHelper。
          ProjectReference 源码同仓一起编译，断点可直进库源码。 -->
     <ProjectReference Include="..\ThirdParty\Kaleidoscope\Kaleidoscope\Kaleidoscope.csproj">
+      <Private>true</Private>
+    </ProjectReference>
+    <!-- Kaleidoscope 视觉域：RTSP 网络相机拉流（RtspFrameCapturer，自带断流自愈看门狗）。
+         网络相机接入直接复用该实现，不另造 RTSP 客户端；其 OpenCvSharp/OnnxRuntime/SkiaSharp
+         依赖随 ProjectReference 自动流转到输出目录（与 YoloDetector 同款接入方式）。 -->
+    <ProjectReference Include="..\ThirdParty\Kaleidoscope\Vision\Detection\Kaleidoscope.Detection.csproj">
       <Private>true</Private>
     </ProjectReference>
   </ItemGroup>

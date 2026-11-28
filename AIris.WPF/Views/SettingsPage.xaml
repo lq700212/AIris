@@ -133,29 +133,62 @@
                                        Style="{StaticResource AiCardSub}" HorizontalAlignment="Right"/>
                         </Grid>
 
-                        <!-- 首行：IP(*) + 端口(130) + 曝光(*)（设计稿 1fr 130px 1fr） -->
+                        <!-- 首行：相机类型 + 相机 IP（类型决定采集链路，保存即热切换） -->
                         <Grid Margin="0,12,0,0">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="14"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0">
+                                <TextBlock Text="相机类型" Style="{StaticResource AiFormLabel}"/>
+                                <ComboBox SelectedIndex="{Binding CameraKindIndex}" Style="{StaticResource AiCombo}"
+                                          ToolTip="Mock=合成画面（演示）；RTSP=网络相机（安格华等）；GigE=海康 SDK">
+                                    <ComboBoxItem Content="Mock 合成画面"/>
+                                    <ComboBoxItem Content="RTSP 网络相机"/>
+                                    <ComboBoxItem Content="海康 GigE 相机"/>
+                                </ComboBox>
+                            </StackPanel>
+                            <StackPanel Grid.Column="2">
+                                <TextBlock Text="相机 IP" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding CameraIp, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}" ToolTip="网络相机 IP（如 192.168.1.188）；GigE 用于枚举连接"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 第二行：RTSP 端口 + 通道 + 曝光（曝光仅 GigE 有效） -->
+                        <Grid Margin="0,12,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="130"/>
                                 <ColumnDefinition Width="14"/>
                                 <ColumnDefinition Width="130"/>
                                 <ColumnDefinition Width="14"/>
                                 <ColumnDefinition Width="*"/>
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0">
-                                <TextBlock Text="相机 IP" Style="{StaticResource AiFormLabel}"/>
-                                <TextBox Text="{Binding CameraIp, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource AiInput}" ToolTip="真机接入后用于 GigE 枚举连接"/>
+                                <TextBlock Text="RTSP 端口" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding CameraPort, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}" ToolTip="RTSP 标准端口 554（相机端不改端口就填 554）"/>
                             </StackPanel>
                             <StackPanel Grid.Column="2">
-                                <TextBlock Text="端口" Style="{StaticResource AiFormLabel}"/>
-                                <TextBox Text="{Binding CameraPort, UpdateSourceTrigger=PropertyChanged}"
-                                         Style="{StaticResource AiInput}" ToolTip="GigE 相机 HTTP/控制端口"/>
+                                <TextBlock Text="RTSP 通道" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding RtspChannel, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}" ToolTip="安格华相机通道号（stream{channel}），0 起"/>
                             </StackPanel>
                             <StackPanel Grid.Column="4">
-                                <TextBlock Text="曝光（μs）" Style="{StaticResource AiFormLabel}"/>
+                                <TextBlock Text="曝光（μs，仅 GigE）" Style="{StaticResource AiFormLabel}"/>
                                 <TextBox Text="{Binding ExposureUs, UpdateSourceTrigger=PropertyChanged, FallbackValue=8000}"
                                          Style="{StaticResource AiInput}"/>
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- 第三行：RTSP 地址模板（整行；换品牌只改模板不改代码） -->
+                        <Grid Margin="0,12,0,0">
+                            <StackPanel>
+                                <TextBlock Text="RTSP 地址模板" Style="{StaticResource AiFormLabel}"/>
+                                <TextBox Text="{Binding RtspUrlFormat, UpdateSourceTrigger=PropertyChanged}"
+                                         Style="{StaticResource AiInput}"
+                                         ToolTip="占位符 {ip} {port} {channel}；安格华默认 rtsp://{ip}:{port}/stream{channel}"/>
                             </StackPanel>
                         </Grid>
 
@@ -212,10 +245,10 @@
                     </StackPanel>
                 </Border>
 
-                <!-- 底部动作条（Mock 说明 + 采集测试帧） -->
+                <!-- 底部动作条（保存即热切换说明 + 采集测试帧） -->
                 <Border Style="{StaticResource AiCard}" Margin="0,14,0,0" Padding="14,10">
                     <Grid>
-                        <TextBlock Text="Mock 演示态：参数即配置真机时的目标值，保存即生效"
+                        <TextBlock Text="保存即应用：相机类型可随时切换（Mock ↔ RTSP），不用重启程序"
                                    FontSize="11" Foreground="{DynamicResource ThemeTextMuted}"
                                    VerticalAlignment="Center"/>
                         <Button Content="采集测试帧" Command="{Binding TestCameraCommand}"

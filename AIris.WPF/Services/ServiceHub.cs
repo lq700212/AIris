@@ -74,7 +74,7 @@ namespace AIris.WPF.Services
             Recipes = new RecipeStore();
             EngineCards = new EngineCardStore();
 
-            var cam = new MockCameraSource();
+            var cam = CreateCamera();
             var cfg0 = Settings.ReadEngine();   // 协议初值注入（cfg.Protocol 空时按引擎卡默认）
 
             // 首次升级迁移（2026-11-23 引擎卡独立参数）：旧版 INI 只有一套全局 HTTP 参数，
@@ -91,6 +91,48 @@ namespace AIris.WPF.Services
             Main = mainVm;
             Host = new AppHost(mainVm);
             mainVm.AttachRuntime();   // 顶栏引擎态胶囊订阅（此时 Monitor 已装配；构造器里还拿不到）
+        }
+
+        /// <summary>
+        /// 按设备配置装配相机源（启动时一次；设备页保存后重启生效）：
+        ///   mock = Mock 合成画面（演示/无相机默认）
+        ///   rtsp = RTSP 网络相机（安格华等，复用 Kaleidoscope RtspFrameCapturer 拉流）
+        ///   hik  = 海康 GigE 工业相机（SDK 桩，真机接入时填实）
+        /// 读取配置失败（INI 损坏等）一律回落 Mock，保证程序能起来。
+        /// </summary>
+        private static ICameraSource CreateCamera()
+        {
+            DeviceConfig dev;
+            try
+            {
+                dev = Settings.ReadDevices();
+            }
+            catch
+            {
+                return new MockCameraSource();
+            }
+
+            string kind = (dev.CameraKind ?? "mock").Trim().ToLowerInvariant();
+            switch (kind)
+            {
+                case "rtsp":
+                    return new RtspCameraSource(dev);
+                case "hik":
+                    return new HikCameraSourceStub();
+                default:
+                    return new MockCameraSource();
+            }
+        }
+
+        /// <summary>
+        /// 设备页保存后应用相机配置（热切换，不用重启程序）：
+        /// 按最新 INI 重建相机源，替换运行中的监控器相机（RunMonitor.SwapCamera 内部处理启停）。
+        /// </summary>
+        public static ICameraSource ApplyCamera()
+        {
+            var next = CreateCamera();
+            if (Monitor != null) Monitor.SwapCamera(next);
+            return next;
         }
 
         /// <summary>

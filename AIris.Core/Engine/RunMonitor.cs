@@ -47,7 +47,8 @@ namespace AIris.Core.Engine
     /// </summary>
     public class RunMonitor : IDisposable
     {
-        private readonly ICameraSource _cam;
+        private ICameraSource _cam;
+        private readonly object _camSync = new object();
         private IDetectionEngine _engine;
         private readonly WorkstepEngine _steps = new WorkstepEngine();
         private readonly IAuditStore _audit;
@@ -96,7 +97,7 @@ namespace AIris.Core.Engine
             _semantic = semantic ?? new Detect.NullSemanticDecisionService();
             _cam.FrameArrived += OnFrame;
             _cam.FrameArrived += OnFramePreview;    // 纯预览直通（内部判 _previewOnly，非预览态零开销）
-            _cam.Log += m => RaiseLog("[相机] " + m);
+            _cam.Log += OnCamLog;
             _steps.StepChanged += (s, e) =>
             {
                 var h = StepChanged; if (h != null) h(this, e);
@@ -159,6 +160,59 @@ namespace AIris.Core.Engine
             RaiseState("已暂停");
             RaiseLog("[运行] 已暂停（相机保持取流）");
         }
+
+        /// <summary>
+        /// 热切换相机源（设备页保存后立即生效，不用重启程序）。
+        /// 顺序：退订旧相机事件 → 停旧相机 → 换实例 → 订新事件 → 按当前运行态决定是否启动。
+        /// 线程安全：_camSync 串行化切换；旧相机退订后即使有在途帧回调，也只会走已退订的旧订阅，
+        /// 不会串到新相机的检测链路。旧实例 Stop+Dispose 在锁外执行（有界等待，不阻塞 UI 过久）。
+        /// </summary>
+        public void SwapCamera(ICameraSource next)
+        {
+            if (next == null) return;
+
+            ICameraSource old;
+            bool shouldRun;
+            lock (_camSync)
+            {
+                old = _cam;
+                if (ReferenceEquals(old, next)) return;
+
+                shouldRun = _running || _previewOnly;
+
+                if (old != null)
+                {
+                    old.FrameArrived -= OnFrame;
+                    old.FrameArrived -= OnFramePreview;
+                    old.Log -= OnCamLog;
+                }
+
+                _cam = next;
+                _cam.FrameArrived += OnFrame;
+                _cam.FrameArrived += OnFramePreview;
+                _cam.Log += OnCamLog;
+            }
+
+            if (old != null)
+            {
+                try { old.Stop(); } catch { }
+                try { old.Dispose(); } catch { }
+            }
+
+            if (shouldRun)
+            {
+                try { next.Start(); }
+                catch (Exception ex) { RaiseLog("[相机] 启动失败：" + ex.Message); }
+            }
+
+            RaiseLog("[相机] 已切换 → " + next.Name + (next.IsConnected ? "（已连接）" : "（未连接）"));
+        }
+
+        /// <summary>当前装配的相机源（设备页状态点/监控台信息行读取）。</summary>
+        public ICameraSource Camera { get { return _cam; } }
+
+        /// <summary>相机日志统一出口（方法订阅，可退订——lambda 订阅退不掉，热切换会串线）。</summary>
+        private void OnCamLog(string m) { RaiseLog("[相机] " + m); }
 
         /// <summary>
         /// 切换引擎（引擎页确认后调用；旧引擎安全释放）。

@@ -48,11 +48,32 @@ namespace AIris.Core.Model
     public class DeviceConfig
     {
         // —— 相机（对位设计稿 settings 页相机参数） ——
+
+        /// <summary>
+        /// 相机类型（决定 ServiceHub 装配哪个 ICameraSource）：
+        ///   mock = Mock 合成画面（默认，演示/无相机时用）
+        ///   rtsp = RTSP 网络相机（安格华等 IP 相机，走 OpenCV VideoCapture 拉流）
+        ///   hik  = 海康 GigE 工业相机（SDK 桩，待真机接入）
+        /// </summary>
+        public string CameraKind { get; set; } = "mock";
+
         public string CameraIp { get; set; } = "192.168.1.64";
-        public string CameraPort { get; set; } = "8080";
+
+        /// <summary>端口：RTSP 标准 554（网络相机），海康 GigE 用 SDK 不用端口。</summary>
+        public string CameraPort { get; set; } = "554";
+
         public string CameraPixelFormat { get; set; } = "Mono8（黑白）";
         public int CameraExposureUs { get; set; } = 8000;
         public string CameraTrigger { get; set; } = "软触发 · 12 fps";
+
+        /// <summary>RTSP 通道号（安格华相机 stream{channel}，0 起）。</summary>
+        public int RtspChannel { get; set; }
+
+        /// <summary>
+        /// RTSP 地址模板：占位符 {ip}/{port}/{channel}。
+        /// 安格华默认 rtsp://{ip}:{port}/stream{channel}；其他品牌按实际地址改模板即可。
+        /// </summary>
+        public string RtspUrlFormat { get; set; } = "rtsp://{ip}:{port}/stream{channel}";
 
         // —— 光源 ——
         public int LightBrightness { get; set; } = 72;

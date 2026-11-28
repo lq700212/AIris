@@ -2,6 +2,56 @@
 
 > 版本史：最新在顶部。commit 前同轮工作只追加 `###` 小节不加版本号。
 
+## V0.1.16（2026-11-28）RTSP 网络相机接入：复用 Kaleidoscope 拉流 + 相机配置界面改造 + 保存即热切换
+
+### 一、相机接入：新增 RTSP 网络相机源（复用库，不另造轮子）
+
+- **新增 `AIris.Core/Camera/RtspCameraSource.cs`**（实现 `ICameraSource`）：薄适配层，
+  内部直接复用 Kaleidoscope.Detection 的 `RtspFrameCapturer`（OpenCV VideoCapture 拉流 +
+  连续失败重连 + 看门狗强杀重建），本类只做两件库不做的事——① Mat（BGR8）→ 统一
+  `Bitmap` 帧格式（逐行按 Stride 拷贝，兼容 OpenCV 行对齐填充）；② 实现 AIris 相机接口。
+- **AIris.Core.csproj** 补 `Kaleidoscope.Detection` ProjectReference + OpenCvSharp HintPath
+  引用（库内为 vendor DLL 引用，不随 ProjectReference 传递编译引用）；native 依赖
+  （OpenCvSharpExtern / opencv_videoio_ffmpeg4100_64）经 ProjectReference 自动流转到
+  `00_ExeBuild\`，与 YoloDetector 同款接入方式。
+- 断流自愈完全委托库实现（本类不重复造轮子）：网络闪断/相机重启时自动重建流，画面恢复。
+
+### 二、设备配置扩展（`DeviceConfig` / INI `[Camera]`）
+
+- 新增 `CameraKind`（`mock` / `rtsp` / `hik`，默认 mock）——决定 ServiceHub 装配哪个相机源。
+- `CameraPort` 默认值 **8080 → 554**（RTSP 标准端口；相机端本身没有"端口设置"，
+  端口是协议默认值，原 8080 属于不合理默认值）。
+- 新增 `RtspChannel`（安格华 `stream{channel}`，0 起）与 `RtspUrlFormat`
+  （默认 `rtsp://{ip}:{port}/stream{channel}`，占位符 `{ip}/{port}/{channel}`，
+  换品牌只改模板不改代码）。
+- `AppSettings.ReadDevices/WriteDevices` 同步读写上述四个字段（旧 INI 缺字段自动回落默认值）。
+
+### 三、设置页相机参数改造（`SettingsPage.xaml` / `SettingsViewModel.cs`）
+
+- 新增「相机类型」下拉（Mock 合成画面 / RTSP 网络相机 / 海康 GigE 相机）。
+- 字段重排：相机 IP + RTSP 端口 + RTSP 通道 + 曝光（仅 GigE 有效）+ RTSP 地址模板整行。
+- **采集测试帧改为真实探测**：RTSP 模式后台 TCP 探测相机端口（3s 超时，不阻塞 UI 线程），
+  成功回显实际 RTSP 地址；失败给出排查清单（ping / 端口 554 / 同网段）。
+- 左导航相机状态点按真实连接态显示（不再硬编码 Online）：Mock 在线 / RTSP 已连接 /
+  未配置 / GigE 桩未接入。
+
+### 四、相机热切换（保存即生效，不用重启）
+
+- `RunMonitor`：`_cam` 改为可换实例 + `_camSync` 串行化；新增 `SwapCamera(next)`
+  （退订旧相机事件 → 停旧 → 换实例 → 订新 → 按运行态决定是否启动；相机日志改用
+  方法订阅 `OnCamLog`，lambda 订阅退不掉会导致热切换串线）+ `Camera` 属性。
+- `ServiceHub`：新增 `CreateCamera()`（按配置装配 mock/rtsp/hik，读配置失败回落 Mock）
+  与 `ApplyCamera()`（重建 + SwapCamera）；设备页保存后立即调用。
+- 实测验证：Mock ↔ RTSP 双向切换画面即时变化，无需重启；重启程序后按 INI 配置
+  自动重连 RTSP 相机（握手约 5.7s，含首帧）。
+
+### 五、真机实测记录（2026-11-28，安格华网络相机）
+
+- 相机 `192.168.1.188`，`rtsp://192.168.1.188:554/stream0`，本机以太网 `192.168.1.254` 同网段。
+- 监控台出画 **2592 × 1944 @ 8 fps**，画面带相机 OSD 水印/时间戳，运行 10 分钟无断流报错、
+  内存 485MB / 46 线程稳定。
+- 「采集测试帧」TCP 探测回显 `TCP 端口可达：192.168.1.188:554` + 实际 RTSP 地址。
+
 ## V0.1.15（2026-11-23）落地指南补「开发机与部署硬件门槛」实测速查
 
 ### 一、新增 §2.9 开发机与部署硬件门槛（`docs/AIris落地指南.md`）

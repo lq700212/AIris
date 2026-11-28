@@ -53,11 +53,14 @@ namespace AIris.Core.Store
         {
             return new DeviceConfig
             {
+                CameraKind = _ini.Read("Camera", "Kind", "mock"),
                 CameraIp = _ini.Read("Camera", "Ip", "192.168.1.64"),
-                CameraPort = _ini.Read("Camera", "Port", "8080"),
+                CameraPort = _ini.Read("Camera", "Port", "554"),
                 CameraPixelFormat = _ini.Read("Camera", "PixelFormat", "Mono8（黑白）"),
                 CameraExposureUs = ParseInt(_ini.Read("Camera", "ExposureUs", "8000"), 8000),
                 CameraTrigger = _ini.Read("Camera", "Trigger", "软触发 · 12 fps"),
+                RtspChannel = ParseInt(_ini.Read("Camera", "RtspChannel", "0"), 0),
+                RtspUrlFormat = _ini.Read("Camera", "RtspUrlFormat", "rtsp://{ip}:{port}/stream{channel}"),
                 LightBrightness = ParseInt(_ini.Read("Light", "Brightness", "72"), 72),
                 LightDiffuserOn = _ini.ReadFlag("Light", "DiffuserOn", true),
                 GuideScreenOn = _ini.ReadFlag("Hmi", "GuideScreenOn", true),
@@ -69,11 +72,14 @@ namespace AIris.Core.Store
 
         public void WriteDevices(DeviceConfig d)
         {
+            _ini.Write("Camera", "Kind", d.CameraKind ?? "mock");
             _ini.Write("Camera", "Ip", d.CameraIp);
             _ini.Write("Camera", "Port", d.CameraPort);
             _ini.Write("Camera", "PixelFormat", d.CameraPixelFormat);
             _ini.Write("Camera", "ExposureUs", d.CameraExposureUs.ToString());
             _ini.Write("Camera", "Trigger", d.CameraTrigger);
+            _ini.Write("Camera", "RtspChannel", d.RtspChannel.ToString());
+            _ini.Write("Camera", "RtspUrlFormat", d.RtspUrlFormat ?? "rtsp://{ip}:{port}/stream{channel}");
             _ini.Write("Light", "Brightness", d.LightBrightness.ToString());
             _ini.WriteFlag("Light", "DiffuserOn", d.LightDiffuserOn);
             _ini.WriteFlag("Hmi", "GuideScreenOn", d.GuideScreenOn);

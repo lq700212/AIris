@@ -1,4 +1,6 @@
 using System;
+using System.Threading.Tasks;
+using System.Windows;
 using System.Windows.Input;
 using AIris.Core.Model;
 using AIris.WPF.Services;
@@ -40,7 +42,7 @@ namespace AIris.WPF.ViewModels
         /// 设备列表（左列；顺序即设计稿）。字段暴露为具名属性，RefreshStatus() 直接改状态点。
         /// 状态语义（vNext 三态）：Online 绿 / Offline 灰 / NotConfigured 橙。
         /// </summary>
-        public DeviceItem Camera { get; } = new DeviceItem { Icon = "◉", Name = "GigE 相机 · 海康" };
+        public DeviceItem Camera { get; } = new DeviceItem { Icon = "◉", Name = "相机 · Mock / RTSP / GigE" };
         public DeviceItem Light { get; } = new DeviceItem { Icon = "☀", Name = "光源控制器" };
         public DeviceItem Guide { get; } = new DeviceItem { Icon = "▢", Name = "引导屏" };
         public DeviceItem Beacon { get; } = new DeviceItem { Icon = "♪", Name = "声光报警灯" };
@@ -67,8 +69,40 @@ namespace AIris.WPF.ViewModels
         /// </summary>
         private void RefreshStatus()
         {
-            Camera.Status = "Online";
-            Camera.StatusText = "在线 · Mock 合成画面";
+            // 相机状态按配置类型判定（与 ServiceHub.CreateCamera 装配口径一致）：
+            //   mock = 演示合成始终在线（绿）；
+            //   rtsp = 优先读运行中相机的真实连接态（保存热切换后立即变绿）；
+            //   hik = SDK 桩未接入（橙）；IP 空 = 未配置（橙）。
+            var live = ServiceHub.Monitor != null ? ServiceHub.Monitor.Camera : null;
+
+            if (CameraKindIndex == 0)
+            {
+                Camera.Status = "Online";
+                Camera.StatusText = "在线 · Mock 合成画面";
+            }
+            else if (CameraKindIndex == 1)
+            {
+                if (string.IsNullOrWhiteSpace(CameraIp))
+                {
+                    Camera.Status = "NotConfigured";
+                    Camera.StatusText = "未配置 · 未填写相机 IP";
+                }
+                else if (live is AIris.Core.Camera.RtspCameraSource && live.IsConnected)
+                {
+                    Camera.Status = "Online";
+                    Camera.StatusText = "在线 · " + live.Name;
+                }
+                else
+                {
+                    Camera.Status = "Offline";
+                    Camera.StatusText = "已配置 · 点「保存」立即应用";
+                }
+            }
+            else
+            {
+                Camera.Status = "NotConfigured";
+                Camera.StatusText = "未接入 · 海康 SDK 桩实现";
+            }
 
             if (LightBrightness <= 0)
             {
@@ -121,6 +155,34 @@ namespace AIris.WPF.ViewModels
         private string _cameraPort = "";
         public string CameraPort { get { return _cameraPort; } set { SetProperty(ref _cameraPort, value); } }
 
+        /// <summary>
+        /// 相机类型索引（ComboBox SelectedIndex 绑定）：
+        /// 0 = Mock 合成画面 / 1 = RTSP 网络相机 / 2 = 海康 GigE 相机。
+        /// 保存时映射回 DeviceConfig.CameraKind（mock/rtsp/hik），ServiceHub 按此装配相机源。
+        /// </summary>
+        private int _cameraKindIndex;
+        public int CameraKindIndex
+        {
+            get { return _cameraKindIndex; }
+            set { SetProperty(ref _cameraKindIndex, value); }
+        }
+
+        /// <summary>RTSP 通道号（安格华相机 stream{channel}，0 起）。</summary>
+        private int _rtspChannel;
+        public int RtspChannel
+        {
+            get { return _rtspChannel; }
+            set { SetProperty(ref _rtspChannel, value); }
+        }
+
+        /// <summary>RTSP 地址模板（占位符 {ip}/{port}/{channel}；空=默认安格华模板）。</summary>
+        private string _rtspUrlFormat = "rtsp://{ip}:{port}/stream{channel}";
+        public string RtspUrlFormat
+        {
+            get { return _rtspUrlFormat; }
+            set { SetProperty(ref _rtspUrlFormat, value); }
+        }
+
         private int _exposureUs;
         public int ExposureUs { get { return _exposureUs; } set { SetProperty(ref _exposureUs, value); } }
 
@@ -154,8 +216,11 @@ namespace AIris.WPF.ViewModels
         private void Load()
         {
             var d = ServiceHub.Settings.ReadDevices();
+            CameraKindIndex = KindToIndex(d.CameraKind);
             CameraIp = d.CameraIp;
             CameraPort = d.CameraPort;
+            RtspChannel = d.RtspChannel;
+            RtspUrlFormat = d.RtspUrlFormat;
             ExposureUs = d.CameraExposureUs;
             LightBrightness = d.LightBrightness;
             DiffuserOn = d.LightDiffuserOn;
@@ -170,8 +235,11 @@ namespace AIris.WPF.ViewModels
         {
             var d = new DeviceConfig
             {
+                CameraKind = IndexToKind(CameraKindIndex),
                 CameraIp = CameraIp,
                 CameraPort = CameraPort,
+                RtspChannel = RtspChannel,
+                RtspUrlFormat = RtspUrlFormat,
                 CameraExposureUs = ExposureUs,
                 LightBrightness = LightBrightness,
                 LightDiffuserOn = DiffuserOn,
@@ -181,14 +249,120 @@ namespace AIris.WPF.ViewModels
                 MesEnabled = MesEnabled
             };
             ServiceHub.Settings.WriteDevices(d);
+            // 相机参数保存后立即热切换（不用重启）：Mock ↔ RTSP ↔ GigE 随时切回
+            ServiceHub.ApplyCamera();
             RefreshStatus();   // 左导航状态点跟随新参数（保存即见变化，不是假状态）
-            ServiceHub.Host.Info("设备参数已保存（Mock 演示态即存即生效；真机接入后按此参数连接）。", "保存成功");
+            ServiceHub.Host.Info("设备参数已保存。相机配置已立即应用（Mock ↔ RTSP 可随时切换）。", "保存成功");
         }
 
-        /// <summary>采集测试帧（Mock 态直接确认；真机接入后触发抓帧验证）。</summary>
+        /// <summary>相机类型索引 → DeviceConfig.CameraKind 值（mock/rtsp/hik）。</summary>
+        private static string IndexToKind(int index)
+        {
+            switch (index)
+            {
+                case 1: return "rtsp";
+                case 2: return "hik";
+                default: return "mock";
+            }
+        }
+
+        /// <summary>DeviceConfig.CameraKind 值 → ComboBox 索引。</summary>
+        private static int KindToIndex(string kind)
+        {
+            if (string.Equals(kind, "rtsp", StringComparison.OrdinalIgnoreCase)) return 1;
+            if (string.Equals(kind, "hik", StringComparison.OrdinalIgnoreCase)) return 2;
+            return 0;
+        }
+
+        /// <summary>
+        /// 采集测试帧：Mock 直接确认；RTSP 后台 TCP 探测相机端口（不阻塞 UI 线程）；
+        /// 海康 GigE 提示 SDK 桩未接入。
+        /// </summary>
         private void TestCamera()
         {
-            ServiceHub.Host.Info("Mock 相机合成正常（监控台画面即测试帧）。\r\n真机接入后此处触发一次抓帧并回显。", "采集测试帧");
+            if (CameraKindIndex == 0)
+            {
+                CameraState = "已连接（Mock）";
+                ServiceHub.Host.Info("Mock 相机合成正常（监控台画面即测试帧）。\r\n切到「RTSP 网络相机」并填好 IP 可测真机连接。", "采集测试帧");
+                return;
+            }
+
+            if (CameraKindIndex == 2)
+            {
+                ServiceHub.Host.Info("海康 GigE 相机为 SDK 桩实现（未接入 MVS SDK）。\r\n网络相机请选「RTSP 网络相机」。", "采集测试帧");
+                return;
+            }
+
+            string ip = (CameraIp ?? "").Trim();
+            int port;
+            if (!int.TryParse(CameraPort, out port) || port <= 0) port = 554;
+
+            if (string.IsNullOrEmpty(ip))
+            {
+                ServiceHub.Host.Info("请先填写相机 IP（如 192.168.1.188）。", "采集测试帧");
+                return;
+            }
+
+            var cfg = new DeviceConfig
+            {
+                CameraIp = ip,
+                CameraPort = port.ToString(),
+                RtspChannel = RtspChannel,
+                RtspUrlFormat = RtspUrlFormat
+            };
+            string url = AIris.Core.Camera.RtspCameraSource.BuildUrl(cfg);
+
+            CameraState = "测试中…";
+
+            // 网络探测必须离开 UI 线程（项目铁律：UI 线程禁做网络 IO）
+            Task.Run(() =>
+            {
+                bool ok = TcpProbe(ip, port, 3000);
+
+                Ui(() =>
+                {
+                    CameraState = ok ? "在线 · RTSP 端口可达" : "离线 · 端口不可达";
+                    if (ok)
+                    {
+                        ServiceHub.Host.Info(
+                            string.Format("TCP 端口可达：{0}:{1}\r\nRTSP 地址：{2}\r\n\r\n点「保存」立即应用该相机（不用重启）。", ip, port, url),
+                            "采集测试帧");
+                    }
+                    else
+                    {
+                        ServiceHub.Host.Info(
+                            string.Format("连接失败：{0}:{1} 无响应。\r\n\r\n排查：\r\n① 相机是否上电、网线/交换机是否连通（先 ping {0}）\r\n② 端口是否 554（RTSP 标准端口）\r\n③ 本机网段是否与相机同网段（192.168.1.x）", ip, port, ip),
+                            "采集测试帧");
+                    }
+                });
+            });
+        }
+
+        /// <summary>TCP 端口探测（带超时；失败/超时一律 false，不抛异常）。</summary>
+        private static bool TcpProbe(string ip, int port, int timeoutMs)
+        {
+            try
+            {
+                using (var client = new System.Net.Sockets.TcpClient())
+                {
+                    var task = client.ConnectAsync(ip, port);
+                    if (!task.Wait(timeoutMs)) return false;
+                    return client.Connected;
+                }
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        /// <summary>后台线程回 UI 线程更新绑定属性/弹窗（WPF Dispatcher）。</summary>
+        private static void Ui(Action action)
+        {
+            var app = Application.Current;
+            if (app == null) { action(); return; }
+            if (app.Dispatcher.CheckAccess()) action();
+            else app.Dispatcher.BeginInvoke(action);
         }
     }
 }
